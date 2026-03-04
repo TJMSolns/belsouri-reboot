@@ -166,10 +166,10 @@ Phase 2 ceremonies (Three Amigos, Example Mapping, Acceptance Criteria Review, B
 
 ### Phase 2: Domain Vertical Slices
 
-**Practice Setup**
+**Practice Setup** -- Backend COMPLETE (65/65 tests passing. All 11 projection tables live.)
 
-- [ ] Events, commands, projections (Rust backend)
-- [ ] Tauri commands: create_office, list_offices, create_provider, list_providers, create_procedure_type, list_procedure_types
+- [x] Events, commands, projections (Rust backend) -- events/practice_setup.rs, projections/practice_setup.rs, practice_setup/service.rs
+- [x] Tauri commands: 28 commands implemented in practice_setup/commands.rs (offices, providers, procedure types, chairs, specializations, practice info, and more)
 - [ ] Frontend: offices page, providers page, procedure types page
 - [ ] End-to-end smoke test verified
 
