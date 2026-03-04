@@ -1,156 +1,86 @@
 <script lang="ts">
   import { invoke } from "@tauri-apps/api/core";
+  import { onMount } from "svelte";
+  import { getErrorMessage } from "$lib/utils/api";
 
-  let name = $state("");
-  let greetMsg = $state("");
-
-  async function greet(event: Event) {
-    event.preventDefault();
-    // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
-    greetMsg = await invoke("greet", { name });
+  interface ModuleStatusDto {
+    module_name: string;
+    status: string;
+    expires_at: string;
+    grace_period_days: number;
+    grace_expires_at: string | null;
+    days_remaining: number | null;
   }
+
+  interface LicenseStatusDto {
+    overall_validity: string;
+    license_type: string | null;
+    eval_expires_at: string | null;
+    modules: ModuleStatusDto[];
+    last_validated_at: string | null;
+  }
+
+  let licenseStatus = $state<LicenseStatusDto | null>(null);
+  let practiceId = $state<string | null>(null);
+  let error = $state<string | null>(null);
+
+  onMount(async () => {
+    try {
+      licenseStatus = await invoke<LicenseStatusDto>("get_license_status");
+      practiceId = await invoke<string | null>("get_practice_id");
+    } catch (e) {
+      error = getErrorMessage(e);
+    }
+  });
 </script>
 
 <main class="container">
-  <h1>Welcome to Tauri + Svelte</h1>
+  <h1>Belsouri</h1>
+  <p>Offline-First Dental Practice Platform</p>
 
-  <div class="row">
-    <a href="https://vite.dev" target="_blank">
-      <img src="/vite.svg" class="logo vite" alt="Vite Logo" />
-    </a>
-    <a href="https://tauri.app" target="_blank">
-      <img src="/tauri.svg" class="logo tauri" alt="Tauri Logo" />
-    </a>
-    <a href="https://svelte.dev" target="_blank">
-      <img src="/svelte.svg" class="logo svelte-kit" alt="SvelteKit Logo" />
-    </a>
-  </div>
-  <p>Click on the Tauri, Vite, and SvelteKit logos to learn more.</p>
+  {#if error}
+    <p class="error">Error: {error}</p>
+  {:else if licenseStatus}
+    <section>
+      <h2>License</h2>
+      <p>Validity: <strong>{licenseStatus.overall_validity}</strong></p>
+      <p>Type: {licenseStatus.license_type ?? "—"}</p>
+      {#if licenseStatus.eval_expires_at}
+        <p>Eval expires: {licenseStatus.eval_expires_at}</p>
+      {/if}
+      {#each licenseStatus.modules as mod}
+        <p>
+          {mod.module_name}: <strong>{mod.status}</strong>
+          {#if mod.days_remaining !== null}({mod.days_remaining} days remaining){/if}
+        </p>
+      {/each}
+    </section>
 
-  <form class="row" onsubmit={greet}>
-    <input id="greet-input" placeholder="Enter a name..." bind:value={name} />
-    <button type="submit">Greet</button>
-  </form>
-  <p>{greetMsg}</p>
+    <section>
+      <h2>Identity</h2>
+      <p>Practice ID: <code>{practiceId ?? "—"}</code></p>
+    </section>
+  {:else}
+    <p>Loading...</p>
+  {/if}
 </main>
 
 <style>
-.logo.vite:hover {
-  filter: drop-shadow(0 0 2em #747bff);
-}
-
-.logo.svelte-kit:hover {
-  filter: drop-shadow(0 0 2em #ff3e00);
-}
-
-:root {
-  font-family: Inter, Avenir, Helvetica, Arial, sans-serif;
-  font-size: 16px;
-  line-height: 24px;
-  font-weight: 400;
-
-  color: #0f0f0f;
-  background-color: #f6f6f6;
-
-  font-synthesis: none;
-  text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  -webkit-text-size-adjust: 100%;
-}
-
-.container {
-  margin: 0;
-  padding-top: 10vh;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  text-align: center;
-}
-
-.logo {
-  height: 6em;
-  padding: 1.5em;
-  will-change: filter;
-  transition: 0.75s;
-}
-
-.logo.tauri:hover {
-  filter: drop-shadow(0 0 2em #24c8db);
-}
-
-.row {
-  display: flex;
-  justify-content: center;
-}
-
-a {
-  font-weight: 500;
-  color: #646cff;
-  text-decoration: inherit;
-}
-
-a:hover {
-  color: #535bf2;
-}
-
-h1 {
-  text-align: center;
-}
-
-input,
-button {
-  border-radius: 8px;
-  border: 1px solid transparent;
-  padding: 0.6em 1.2em;
-  font-size: 1em;
-  font-weight: 500;
-  font-family: inherit;
-  color: #0f0f0f;
-  background-color: #ffffff;
-  transition: border-color 0.25s;
-  box-shadow: 0 2px 2px rgba(0, 0, 0, 0.2);
-}
-
-button {
-  cursor: pointer;
-}
-
-button:hover {
-  border-color: #396cd8;
-}
-button:active {
-  border-color: #396cd8;
-  background-color: #e8e8e8;
-}
-
-input,
-button {
-  outline: none;
-}
-
-#greet-input {
-  margin-right: 5px;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    color: #f6f6f6;
-    background-color: #2f2f2f;
+  .container {
+    padding: 2rem;
+    font-family: system-ui, sans-serif;
   }
-
-  a:hover {
-    color: #24c8db;
+  .error {
+    color: red;
   }
-
-  input,
-  button {
-    color: #ffffff;
-    background-color: #0f0f0f98;
+  section {
+    margin-top: 1.5rem;
+    padding: 1rem;
+    border: 1px solid #ddd;
+    border-radius: 8px;
   }
-  button:active {
-    background-color: #0f0f0f69;
+  code {
+    font-size: 0.75rem;
+    word-break: break-all;
   }
-}
-
 </style>
