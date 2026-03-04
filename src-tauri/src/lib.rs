@@ -3,6 +3,7 @@ pub mod db;
 pub mod events;
 pub mod licensing;
 pub mod practice_setup;
+pub mod patient_management;
 pub mod projections;
 
 use std::sync::Mutex;
@@ -21,6 +22,10 @@ use practice_setup::commands::{
     define_procedure_type, update_procedure_type,
     deactivate_procedure_type, reactivate_procedure_type,
     seed_default_procedure_types, list_procedure_types,
+};
+use patient_management::commands::{
+    register_patient, update_patient_demographics, update_patient_contact_info,
+    add_patient_note, archive_patient, unarchive_patient, search_patients, get_patient,
 };
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -47,6 +52,8 @@ pub fn run() {
                 define_procedure_type, update_procedure_type,
                 deactivate_procedure_type, reactivate_procedure_type,
                 seed_default_procedure_types, list_procedure_types,
+                register_patient, update_patient_demographics, update_patient_contact_info,
+                add_patient_note, archive_patient, unarchive_patient, search_patients, get_patient,
             ])
             .export(
                 Typescript::default().bigint(BigIntExportBehavior::Number),
@@ -94,6 +101,8 @@ pub fn run() {
             define_procedure_type, update_procedure_type,
             deactivate_procedure_type, reactivate_procedure_type,
             seed_default_procedure_types, list_procedure_types,
+            register_patient, update_patient_demographics, update_patient_contact_info,
+            add_patient_note, archive_patient, unarchive_patient, search_patients, get_patient,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

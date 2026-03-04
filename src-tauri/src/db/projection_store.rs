@@ -96,6 +96,37 @@ pub struct ProcedureTypeRow {
     pub is_active: bool,
 }
 
+// ── Patient Management row types ──────────────────────────────────────────────
+
+#[derive(Debug, Clone)]
+pub struct PatientRow {
+    pub patient_id: String,
+    pub first_name: String,
+    pub last_name: String,
+    pub full_name_display: String,
+    pub phone: Option<String>,
+    pub email: Option<String>,
+    pub preferred_contact_channel: Option<String>,
+    pub preferred_office_id: Option<String>,
+    pub date_of_birth: Option<String>,
+    pub address_line_1: Option<String>,
+    pub city_town: Option<String>,
+    pub subdivision: Option<String>,
+    pub country: Option<String>,
+    pub registered_by: String,
+    pub registered_at: String,
+    pub archived: bool,
+}
+
+#[derive(Debug, Clone)]
+pub struct PatientNoteRow {
+    pub note_id: String,
+    pub patient_id: String,
+    pub text: String,
+    pub recorded_by: String,
+    pub recorded_at: String,
+}
+
 impl ProjectionStore {
     pub fn open(path: &std::path::Path) -> Result<Self> {
         let conn = Connection::open(path)?;
@@ -201,6 +232,36 @@ impl ProjectionStore {
                 default_duration_minutes INTEGER NOT NULL,
                 is_active INTEGER NOT NULL DEFAULT 1
             );
+            CREATE TABLE IF NOT EXISTS patients (
+                patient_id TEXT PRIMARY KEY,
+                first_name TEXT NOT NULL,
+                last_name TEXT NOT NULL,
+                full_name_display TEXT NOT NULL,
+                phone TEXT,
+                email TEXT,
+                preferred_contact_channel TEXT,
+                preferred_office_id TEXT,
+                date_of_birth TEXT,
+                address_line_1 TEXT,
+                city_town TEXT,
+                subdivision TEXT,
+                country TEXT,
+                registered_by TEXT NOT NULL,
+                registered_at TEXT NOT NULL,
+                archived INTEGER NOT NULL DEFAULT 0
+            );
+            CREATE INDEX IF NOT EXISTS idx_patients_name
+                ON patients(lower(last_name), lower(first_name));
+            CREATE INDEX IF NOT EXISTS idx_patients_phone ON patients(phone);
+            CREATE TABLE IF NOT EXISTS patient_notes (
+                note_id TEXT PRIMARY KEY,
+                patient_id TEXT NOT NULL,
+                text TEXT NOT NULL,
+                recorded_by TEXT NOT NULL,
+                recorded_at TEXT NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_patient_notes_patient_id
+                ON patient_notes(patient_id);
         ")?;
         Ok(())
     }
@@ -641,6 +702,217 @@ impl ProjectionStore {
             category: row.get(2)?,
             default_duration_minutes: row.get::<_, i64>(3)? as u32,
             is_active: row.get::<_, i32>(4)? != 0,
+        }))?.collect::<SqlResult<Vec<_>>>()?;
+        Ok(rows)
+    }
+
+    // ── Patient Management rows ───────────────────────────────────────────────
+
+    pub fn upsert_patient(&self, row: &PatientRow) -> Result<()> {
+        self.conn.execute(
+            "INSERT INTO patients (
+                 patient_id, first_name, last_name, full_name_display, phone, email,
+                 preferred_contact_channel, preferred_office_id, date_of_birth,
+                 address_line_1, city_town, subdivision, country,
+                 registered_by, registered_at, archived)
+             VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16)
+             ON CONFLICT(patient_id) DO UPDATE SET
+                 first_name = excluded.first_name,
+                 last_name = excluded.last_name,
+                 full_name_display = excluded.full_name_display,
+                 phone = excluded.phone,
+                 email = excluded.email,
+                 preferred_contact_channel = excluded.preferred_contact_channel,
+                 preferred_office_id = excluded.preferred_office_id,
+                 date_of_birth = excluded.date_of_birth,
+                 address_line_1 = excluded.address_line_1,
+                 city_town = excluded.city_town,
+                 subdivision = excluded.subdivision,
+                 country = excluded.country,
+                 registered_by = excluded.registered_by,
+                 registered_at = excluded.registered_at,
+                 archived = excluded.archived",
+            params![
+                row.patient_id, row.first_name, row.last_name, row.full_name_display,
+                row.phone, row.email, row.preferred_contact_channel, row.preferred_office_id,
+                row.date_of_birth, row.address_line_1, row.city_town, row.subdivision,
+                row.country, row.registered_by, row.registered_at, row.archived as i32
+            ],
+        )?;
+        Ok(())
+    }
+
+    pub fn update_patient_demographics(
+        &self,
+        patient_id: &str,
+        first_name: &str,
+        last_name: &str,
+        full_name_display: &str,
+        date_of_birth: Option<&str>,
+        address_line_1: Option<&str>,
+        city_town: Option<&str>,
+        subdivision: Option<&str>,
+        country: Option<&str>,
+    ) -> Result<()> {
+        self.conn.execute(
+            "UPDATE patients SET
+                 first_name = ?2, last_name = ?3, full_name_display = ?4,
+                 date_of_birth = ?5, address_line_1 = ?6, city_town = ?7,
+                 subdivision = ?8, country = ?9
+             WHERE patient_id = ?1",
+            params![patient_id, first_name, last_name, full_name_display,
+                    date_of_birth, address_line_1, city_town, subdivision, country],
+        )?;
+        Ok(())
+    }
+
+    pub fn update_patient_contact_info(
+        &self,
+        patient_id: &str,
+        phone: Option<&str>,
+        email: Option<&str>,
+        preferred_contact_channel: Option<&str>,
+    ) -> Result<()> {
+        self.conn.execute(
+            "UPDATE patients SET phone = ?2, email = ?3, preferred_contact_channel = ?4
+             WHERE patient_id = ?1",
+            params![patient_id, phone, email, preferred_contact_channel],
+        )?;
+        Ok(())
+    }
+
+    pub fn set_patient_archived(&self, patient_id: &str, archived: bool) -> Result<()> {
+        self.conn.execute(
+            "UPDATE patients SET archived = ?2 WHERE patient_id = ?1",
+            params![patient_id, archived as i32],
+        )?;
+        Ok(())
+    }
+
+    pub fn get_patient(&self, patient_id: &str) -> Result<Option<PatientRow>> {
+        let r: SqlResult<PatientRow> = self.conn.query_row(
+            "SELECT patient_id, first_name, last_name, full_name_display, phone, email,
+                    preferred_contact_channel, preferred_office_id, date_of_birth,
+                    address_line_1, city_town, subdivision, country,
+                    registered_by, registered_at, archived
+             FROM patients WHERE patient_id = ?1",
+            params![patient_id],
+            |row| Ok(PatientRow {
+                patient_id: row.get(0)?,
+                first_name: row.get(1)?,
+                last_name: row.get(2)?,
+                full_name_display: row.get(3)?,
+                phone: row.get(4)?,
+                email: row.get(5)?,
+                preferred_contact_channel: row.get(6)?,
+                preferred_office_id: row.get(7)?,
+                date_of_birth: row.get(8)?,
+                address_line_1: row.get(9)?,
+                city_town: row.get(10)?,
+                subdivision: row.get(11)?,
+                country: row.get(12)?,
+                registered_by: row.get(13)?,
+                registered_at: row.get(14)?,
+                archived: row.get::<_, i32>(15)? != 0,
+            }),
+        );
+        match r {
+            Ok(v) => Ok(Some(v)),
+            Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+            Err(e) => Err(e.into()),
+        }
+    }
+
+    /// Search patients. All filter params are optional (None = no filter).
+    /// name_prefix matches start of first_name OR last_name (case-insensitive).
+    /// phone_fragment is a substring match.
+    pub fn search_patients(
+        &self,
+        name_prefix: Option<&str>,
+        phone_fragment: Option<&str>,
+        preferred_office_id: Option<&str>,
+        include_archived: bool,
+    ) -> Result<Vec<PatientRow>> {
+        let name_pat = name_prefix.map(|s| format!("{}%", s.to_lowercase()));
+        let phone_pat = phone_fragment.map(|s| format!("%{}%", s));
+        let mut stmt = self.conn.prepare(
+            "SELECT patient_id, first_name, last_name, full_name_display, phone, email,
+                    preferred_contact_channel, preferred_office_id, date_of_birth,
+                    address_line_1, city_town, subdivision, country,
+                    registered_by, registered_at, archived
+             FROM patients
+             WHERE
+                 (?1 IS NULL OR lower(first_name) LIKE ?1 OR lower(last_name) LIKE ?1)
+                 AND (?2 IS NULL OR phone LIKE ?2)
+                 AND (?3 IS NULL OR preferred_office_id = ?3)
+                 AND (archived = 0 OR ?4 = 1)
+             ORDER BY last_name ASC, first_name ASC
+             LIMIT 200",
+        )?;
+        let rows = stmt.query_map(
+            params![name_pat, phone_pat, preferred_office_id, include_archived as i32],
+            |row| Ok(PatientRow {
+                patient_id: row.get(0)?,
+                first_name: row.get(1)?,
+                last_name: row.get(2)?,
+                full_name_display: row.get(3)?,
+                phone: row.get(4)?,
+                email: row.get(5)?,
+                preferred_contact_channel: row.get(6)?,
+                preferred_office_id: row.get(7)?,
+                date_of_birth: row.get(8)?,
+                address_line_1: row.get(9)?,
+                city_town: row.get(10)?,
+                subdivision: row.get(11)?,
+                country: row.get(12)?,
+                registered_by: row.get(13)?,
+                registered_at: row.get(14)?,
+                archived: row.get::<_, i32>(15)? != 0,
+            }),
+        )?.collect::<SqlResult<Vec<_>>>()?;
+        Ok(rows)
+    }
+
+    /// Returns true if a non-archived patient with the same first+last name AND phone exists.
+    pub fn check_duplicate_patient(
+        &self,
+        first_name: &str,
+        last_name: &str,
+        phone: &str,
+    ) -> Result<bool> {
+        let count: i64 = self.conn.query_row(
+            "SELECT COUNT(*) FROM patients
+             WHERE lower(first_name) = lower(?1)
+               AND lower(last_name) = lower(?2)
+               AND phone = ?3
+               AND archived = 0",
+            params![first_name, last_name, phone],
+            |row| row.get(0),
+        )?;
+        Ok(count > 0)
+    }
+
+    pub fn add_patient_note(&self, row: &PatientNoteRow) -> Result<()> {
+        self.conn.execute(
+            "INSERT OR IGNORE INTO patient_notes (note_id, patient_id, text, recorded_by, recorded_at)
+             VALUES (?1, ?2, ?3, ?4, ?5)",
+            params![row.note_id, row.patient_id, row.text, row.recorded_by, row.recorded_at],
+        )?;
+        Ok(())
+    }
+
+    pub fn list_patient_notes(&self, patient_id: &str) -> Result<Vec<PatientNoteRow>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT note_id, patient_id, text, recorded_by, recorded_at
+             FROM patient_notes WHERE patient_id = ?1
+             ORDER BY recorded_at ASC",
+        )?;
+        let rows = stmt.query_map(params![patient_id], |row| Ok(PatientNoteRow {
+            note_id: row.get(0)?,
+            patient_id: row.get(1)?,
+            text: row.get(2)?,
+            recorded_by: row.get(3)?,
+            recorded_at: row.get(4)?,
         }))?.collect::<SqlResult<Vec<_>>>()?;
         Ok(rows)
     }

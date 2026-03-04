@@ -17,6 +17,7 @@
 
 <nav class="app-nav">
   <a href="/" class="brand">Belsouri</a>
+  <a href="/patients" class:active={$page.url.pathname.startsWith("/patients")}>Patients</a>
   <a href="/setup" class:active={$page.url.pathname.startsWith("/setup")}>Setup</a>
 </nav>
 
