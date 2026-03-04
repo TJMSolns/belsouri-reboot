@@ -2,7 +2,7 @@
   import { commands } from "$lib/bindings";
   import type {
     AppointmentDto, AppointmentWithNotesDto, AppointmentNoteDto,
-    CallListEntryDto
+    CallListEntryDto, ProviderScheduleEntry,
   } from "$lib/bindings";
   import { getErrorMessage } from "$lib/utils/api";
 
@@ -51,6 +51,10 @@
 
   // Patient search results for booking
   let patientSearchResults = $state<typeof patients>([]);
+
+  // Provider roster
+  let providerRoster = $state<ProviderScheduleEntry[]>([]);
+  let rosterLoading = $state(false);
 
   // Note form
   let noteAppointmentId = $state("");
@@ -127,6 +131,16 @@
       schedule = res.data;
     } else {
       scheduleError = getErrorMessage(res.error);
+    }
+  }
+
+  async function loadProviderRoster() {
+    if (!selectedOfficeId || !selectedDate) return;
+    rosterLoading = true;
+    const res = await commands.getOfficeProviderSchedule(selectedOfficeId, selectedDate);
+    rosterLoading = false;
+    if (res.status === "ok") {
+      providerRoster = res.data;
     }
   }
 
@@ -267,13 +281,14 @@
   import { onMount } from "svelte";
   onMount(async () => {
     await loadSetupData();
-    await loadSchedule();
+    await Promise.all([loadSchedule(), loadProviderRoster()]);
   });
 
-  // Reload schedule when office or date changes
+  // Reload schedule and roster when office or date changes
   $effect(() => {
     if (selectedOfficeId && selectedDate) {
       loadSchedule();
+      loadProviderRoster();
     }
   });
 </script>
@@ -296,6 +311,22 @@
       </button>
     </div>
   </div>
+
+  <!-- Provider roster -->
+  {#if selectedOfficeId}
+    <div class="roster-bar">
+      <span class="roster-label">Providers today:</span>
+      {#if rosterLoading}
+        <span class="muted">Loading…</span>
+      {:else if providerRoster.length === 0}
+        <span class="muted">None scheduled</span>
+      {:else}
+        {#each providerRoster as entry}
+          <span class="roster-chip">{entry.provider_name} <span class="roster-hours">{entry.start_time}–{entry.end_time}</span></span>
+        {/each}
+      {/if}
+    </div>
+  {/if}
 
   <!-- Book appointment form -->
   {#if showBookForm}
@@ -764,4 +795,28 @@
   .success-msg { color: #6bcf7f; font-size: 0.82rem; margin: 0.4rem 0; }
   .muted { color: #666; font-size: 0.85rem; }
   .empty-schedule { padding: 2rem; text-align: center; color: #555; }
+
+  /* Provider roster bar */
+  .roster-bar {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    padding: 0.45rem 0.75rem;
+    background: #12122a;
+    border: 1px solid #2a2a40;
+    border-radius: 6px;
+    margin-bottom: 0.75rem;
+    font-size: 0.82rem;
+  }
+  .roster-label { color: #777; white-space: nowrap; }
+  .roster-chip {
+    background: #1a2a3a;
+    border: 1px solid #2a4a6a;
+    border-radius: 12px;
+    padding: 0.15rem 0.6rem;
+    color: #7eb8f7;
+    white-space: nowrap;
+  }
+  .roster-hours { color: #4a8ac0; font-size: 0.78rem; }
 </style>

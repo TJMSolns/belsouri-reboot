@@ -188,12 +188,12 @@ Phase 2 ceremonies (Three Amigos, Example Mapping, Acceptance Criteria Review, B
 - [x] Frontend: /staff — bootstrap, staff cards, roles, PIN ops, archive/unarchive
 - [x] 130 backend tests pass, 0 TS errors
 
-**Staff Scheduling**
+**Staff Scheduling** — COMPLETE (155 backend tests passing, 0 TS errors)
 
-- [ ] Events, commands, projections (projection-first model)
-- [ ] Tauri commands: set_availability_pattern, add_exception, get_provider_schedule
-- [ ] Frontend: provider schedule view
-- [ ] End-to-end smoke test verified
+- [x] Projection-first — no new aggregates or events; reads Practice Setup projection tables
+- [x] Tauri commands: query_provider_availability (4-reason logic), get_office_provider_schedule (90-day window)
+- [x] Frontend: provider roster bar on /schedule page showing who is working today + hours
+- [x] 25 backend service tests (SS1–SS6 BDD coverage, all priority rules)
 
 **Patient Scheduling (Appointments)** — COMPLETE
 

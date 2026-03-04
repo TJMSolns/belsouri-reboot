@@ -655,6 +655,15 @@ impl ProjectionStore {
         Ok(ids)
     }
 
+    pub fn list_providers_for_office(&self, office_id: &str) -> Result<Vec<String>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT provider_id FROM provider_office_assignments WHERE office_id = ?1"
+        )?;
+        let ids = stmt.query_map(params![office_id], |row| row.get(0))?
+            .collect::<SqlResult<Vec<String>>>()?;
+        Ok(ids)
+    }
+
     pub fn set_provider_availability(&self, row: &ProviderAvailabilityRow) -> Result<()> {
         self.conn.execute(
             "INSERT INTO provider_availability
