@@ -11,7 +11,11 @@ All foundational documents are in place:
 - `ADR-001` -- technology stack confirmed (Rust + Tauri + Svelte + SQLite)
 - `LESSONS-LEARNED.md` -- institutional memory
 
-**Next: Phase 1 (Infrastructure + First Domain Discovery)**
+**Phase 1 Track B: All Domain Discovery** -- COMPLETE (all 6 contexts, all 5 ceremonies each)
+
+**Phase 2: All Domain Implementations** -- COMPLETE (all 6 contexts, all 5 ceremonies each)
+
+**Next: Track A -- Infrastructure Vertical Slice**
 
 ---
 
@@ -40,7 +44,7 @@ Clinical records, billing, insurance, and Jamaica EHR integration are post-MVP.
 - [x] ADR-001: Technology stack decision
 - [x] LESSONS-LEARNED.md
 
-### Phase 1: Infrastructure + First Domain Discovery
+### Phase 1: Infrastructure + Domain Discovery
 
 **Runs as two parallel tracks.**
 
@@ -56,48 +60,109 @@ Prove the entire toolchain works end-to-end with one command flowing through all
 - [ ] License enforcement: license check on startup, 30-day offline grace period, license key validation
 - [ ] CI: backend tests (`cargo test`), frontend checks (`pnpm check`, `pnpm lint`), clippy
 
-#### Track B: Practice Setup Domain Discovery
+#### Track B: Domain Discovery (ALL COMPLETE)
 
-Phase 1 ceremonies for the Practice Setup bounded context (per HOW-WE-WORK.md):
+Phase 1 ceremonies for all bounded contexts (per HOW-WE-WORK.md):
 
-- [ ] 1.1 Event Storming (`doc/domain/event-storming/practice-setup-events.md`)
-- [ ] 1.2 Ubiquitous Language (`doc/domain/ubiquitous-language.md`)
-- [ ] 1.3 Domain Modeling -- aggregate docs (`doc/domain/aggregates/`)
-- [ ] 1.4 Context Mapping (`doc/domain/context-maps/context-map.md`)
-- [ ] 1.5 Governance Review
+**Practice Setup**
 
-### Phase 2: Practice Setup Implementation
+- [x] 1.1 Event Storming (`doc/domain/event-storming/practice-setup-events.md`)
+- [x] 1.2 Ubiquitous Language (`doc/domain/ubiquitous-language.md`)
+- [x] 1.3 Domain Modeling -- aggregate docs (`doc/domain/aggregates/`)
+- [x] 1.4 Context Mapping (`doc/domain/context-maps/context-map.md`)
+- [x] 1.5 Governance Review
 
-Implement the Practice Setup bounded context with TDD through the Tauri invoke layer.
+**Licensing**
 
-- [ ] Phase 2 ceremonies (Three Amigos, Example Mapping, BDD Scenarios)
-- [ ] Offices: create, configure hours, chairs
-- [ ] Providers: register, assign to offices, define specialties
-- [ ] Procedure types: define procedures offered by the practice
-- [ ] Full TDD: failing test -> implement -> refactor, tested via Tauri commands
+- [x] 1.1 Event Storming (`doc/domain/event-storming/licensing-events.md`)
+- [x] 1.2 Ubiquitous Language (`doc/domain/ubiquitous-language.md`)
+- [x] 1.3 Domain Modeling -- aggregate docs (`doc/domain/aggregates/`)
+- [x] 1.4 Context Mapping (`doc/domain/context-maps/context-map.md`)
+- [x] 1.5 Governance Review
 
-### Phase 3: Staff Scheduling
+**Staff Management**
 
-- [ ] Phase 1 ceremonies (event storming, ubiquitous language, domain modeling)
-- [ ] Phase 2 ceremonies (example mapping, BDD scenarios)
-- [ ] Provider availability patterns (weekly schedules, recurring blocks)
-- [ ] Exceptions (holidays, time off, overrides)
-- [ ] Office-provider schedule view
+- [x] 1.1 Event Storming (`doc/domain/event-storming/staff-management-events.md`)
+- [x] 1.2 Ubiquitous Language (`doc/domain/ubiquitous-language.md`)
+- [x] 1.3 Domain Modeling -- aggregate docs (`doc/domain/aggregates/`)
+- [x] 1.4 Context Mapping (`doc/domain/context-maps/context-map.md`)
+- [x] 1.5 Governance Review
 
-### Phase 4: Patient Management
+**Staff Scheduling** (projection-first model confirmed)
 
-- [ ] Phase 1 ceremonies (event storming, ubiquitous language, domain modeling)
-- [ ] Phase 2 ceremonies (example mapping, BDD scenarios)
-- [ ] Patient registration and demographics
-- [ ] Patient search and lookup
-- [ ] Contact information management
+- [x] 1.1 Event Storming (`doc/domain/event-storming/staff-scheduling-events.md`)
+- [x] 1.2 Ubiquitous Language (`doc/domain/ubiquitous-language.md`)
+- [x] 1.3 Domain Modeling -- aggregate docs (`doc/domain/aggregates/`)
+- [x] 1.4 Context Mapping (`doc/domain/context-maps/context-map.md`)
+- [x] 1.5 Governance Review
 
-### Phase 5: Patient Scheduling
+**Patient Management**
 
-- [ ] Phase 2 ceremonies (example mapping, BDD scenarios -- context established by Phases 3 & 4)
-- [ ] Appointment booking against available slots
-- [ ] Today's schedule view
-- [ ] Appointment management (reschedule, cancel)
+- [x] 1.1 Event Storming (`doc/domain/event-storming/patient-management-events.md`)
+- [x] 1.2 Ubiquitous Language (`doc/domain/ubiquitous-language.md`)
+- [x] 1.3 Domain Modeling -- aggregate docs (`doc/domain/aggregates/`)
+- [x] 1.4 Context Mapping (`doc/domain/context-maps/context-map.md`)
+- [x] 1.5 Governance Review
+
+**Patient Scheduling**
+
+- [x] 1.1 Event Storming (`doc/domain/event-storming/patient-scheduling-events.md`)
+- [x] 1.2 Ubiquitous Language (`doc/domain/ubiquitous-language.md`)
+- [x] 1.3 Domain Modeling -- aggregate docs (`doc/domain/aggregates/`)
+- [x] 1.4 Context Mapping (`doc/domain/context-maps/context-map.md`)
+- [x] 1.5 Governance Review
+
+### Phase 2: Domain Implementation Ceremonies (ALL COMPLETE)
+
+Phase 2 ceremonies (Three Amigos, Example Mapping, Acceptance Criteria Review, BDD Scenarios, Governance) for all bounded contexts:
+
+**Licensing Phase 2**
+
+- [x] 2.1 Three Amigos
+- [x] 2.2 Example Mapping (`doc/scenarios/example-maps/licensing-examples.md`)
+- [x] 2.3 Acceptance Criteria Review
+- [x] 2.4 BDD Scenarios (`features/licensing.feature`)
+- [x] 2.5 Governance Review
+
+**Practice Setup Phase 2**
+
+- [x] 2.1 Three Amigos
+- [x] 2.2 Example Mapping (`doc/scenarios/example-maps/practice-setup-examples.md`)
+- [x] 2.3 Acceptance Criteria Review
+- [x] 2.4 BDD Scenarios (`features/practice-setup.feature`)
+- [x] 2.5 Governance Review
+
+**Staff Management Phase 2**
+
+- [x] 2.1 Three Amigos
+- [x] 2.2 Example Mapping (`doc/scenarios/example-maps/staff-management-examples.md`)
+- [x] 2.3 Acceptance Criteria Review
+- [x] 2.4 BDD Scenarios (`features/staff-management.feature`)
+- [x] 2.5 Governance Review
+
+**Staff Scheduling Phase 2**
+
+- [x] 2.1 Three Amigos
+- [x] 2.2 Example Mapping (`doc/scenarios/example-maps/staff-scheduling-examples.md`)
+- [x] 2.3 Acceptance Criteria Review
+- [x] 2.4 BDD Scenarios (`features/staff-scheduling.feature`)
+- [x] 2.5 Governance Review
+
+**Patient Management Phase 2**
+
+- [x] 2.1 Three Amigos
+- [x] 2.2 Example Mapping (`doc/scenarios/example-maps/patient-management-examples.md`)
+- [x] 2.3 Acceptance Criteria Review
+- [x] 2.4 BDD Scenarios (`features/patient-management.feature`)
+- [x] 2.5 Governance Review
+
+**Patient Scheduling Phase 2**
+
+- [x] 2.1 Three Amigos
+- [x] 2.2 Example Mapping (`doc/scenarios/example-maps/patient-scheduling-examples.md`)
+- [x] 2.3 Acceptance Criteria Review
+- [x] 2.4 BDD Scenarios (`features/patient-scheduling.feature`)
+- [x] 2.5 Governance Review
 
 ### Post-MVP
 
@@ -146,3 +211,10 @@ Architectural and product decisions are recorded in:
 - **ADRs**: `doc/governance/ADR/` -- architectural decisions (e.g., ADR-001: technology stack)
 - **PDRs**: `doc/governance/PDR/` -- product decisions
 - **Policies**: `doc/governance/POL/` -- standing policies
+
+---
+
+## Backlog / Deferred Decisions
+
+- **ADR-003-license-server-hosting**: Tony to decide Fly.io vs AWS Lambda vs VPS. ADR-003 is drafted with Fly.io recommendation -- awaiting Tony's Accepted sign-off.
+- **Staff Management SM-1 through SM-5**: Phase 2.3/2.5 staff-management-examples.md and staff-management.feature still carry ASSUMED markers for Tony's OQ confirmations. These were confirmed verbally by Tony in the 2026-03-04 session but the artifact wasn't updated before the --force disaster. To be fixed before Staff Management enters Track A implementation.

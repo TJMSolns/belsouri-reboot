@@ -46,6 +46,7 @@ Staff members with the Provider role also have a corresponding Provider aggregat
 | **RoleRemoved** | staff_member_id, role | A role is removed from a staff member's role set |
 | **PINSet** | staff_member_id, pin_hash | Staff member establishes their PIN for the first time |
 | **PINChanged** | staff_member_id, pin_hash | Staff member replaces their existing PIN |
+| **PINReset** | staff_member_id, reset_by_staff_member_id | Practice Manager clears a staff member's PIN (forgotten PIN recovery — no current PIN required) |
 | **StaffMemberArchived** | staff_member_id | Staff member is decommissioned; hidden from active lists |
 | **StaffMemberUnarchived** | staff_member_id | Staff member is restored to active status |
 
@@ -61,6 +62,7 @@ Staff members with the Provider role also have a corresponding Provider aggregat
 | RemoveRole | staff_member_id, role | RoleRemoved | Staff member exists and is active, holds the role, not removing PracticeManager from the last active Practice Manager |
 | SetPIN | staff_member_id, new_pin | PINSet | Staff member exists, is active, has no PIN set yet |
 | ChangePIN | staff_member_id, current_pin, new_pin | PINChanged | Staff member exists, is active, has a PIN, current_pin hash matches stored hash |
+| ResetPIN | staff_member_id, reset_by_staff_member_id | PINReset | Target staff member exists and is active; issuer holds PracticeManager role and is active; target staff member is not the issuer (PMs use ChangePIN for their own PIN) |
 | ArchiveStaffMember | staff_member_id | StaffMemberArchived | Not already archived, not the last active Practice Manager |
 | UnarchiveStaffMember | staff_member_id | StaffMemberUnarchived | Currently archived |
 
@@ -85,7 +87,7 @@ Staff members with the Provider role also have a corresponding Provider aggregat
 stateDiagram-v2
     [*] --> Active : RegisterStaffMember / ClaimPracticeManagerRole
     Active --> Active : AssignRole / RemoveRole
-    Active --> Active : SetPIN / ChangePIN
+    Active --> Active : SetPIN / ChangePIN / ResetPIN
     Active --> Archived : ArchiveStaffMember
     Archived --> Active : UnarchiveStaffMember
 ```
@@ -97,12 +99,12 @@ stateDiagram-v2
 PIN is used for **local quick switching** on a shared workstation — not for remote authentication or session management.
 
 - When a staff member is registered, they have no PIN (cannot switch to active identity yet)
-- SetPIN is called once to establish the PIN; PINChanged replaces it thereafter
+- SetPIN is called once to establish the PIN; PINChanged replaces it thereafter; ResetPIN clears it (Practice Manager action for forgotten PIN recovery)
 - The PIN is hashed at the command layer before the event is stored; the raw PIN never enters the event store
 - "Switching" to active identity means: the application asks for a PIN, verifies it against the stored hash, and records the current active identity in application state (not in the event store)
 - Identity switching itself does not produce a domain event (it is a session concern, not a domain concern)
 
-[OPEN QUESTION — Tony to confirm] Should IdentitySwitched be a domain event for audit purposes? Assumption: No — PIN-based switching is a UX concern, not a domain event. The event store records what changed in the domain, not who was active.
+[CONFIRMED — Tony 2026-03-04] IdentitySwitched is NOT a domain event. PIN-based switching is a UX/session concern. The event store records what changed in the domain, not who was active.
 
 ---
 
@@ -128,7 +130,7 @@ A StaffMember with the Provider role is also represented as a Provider aggregate
 
 The Practice Setup Provider aggregate stores the `staff_member_id` as a reference. When registering a provider in Practice Setup, the command validates that the referenced `staff_member_id` belongs to an active StaffMember with the Provider role.
 
-Archiving a StaffMember does **not** automatically archive the Practice Setup Provider. These are independent lifecycle events. [OPEN QUESTION — Tony to confirm] Should archiving a StaffMember automatically trigger archiving the related Provider in Practice Setup? Assumption: No automatic cascade at MVP. The Practice Manager handles each context independently.
+Archiving a StaffMember does **not** automatically archive the Practice Setup Provider. These are independent lifecycle events. [CONFIRMED — Tony 2026-03-04] No automatic cascade at MVP. Archiving a StaffMember does not trigger archiving the related Provider. The Practice Manager handles each context independently.
 
 ---
 

@@ -2,18 +2,19 @@
 #
 # Phase 2.4 BDD Scenarios — Staff Management context
 # Date: 2026-03-03
-# Assumptions SM-1 through SM-5 flagged — pending Tony review before 2.5 governance sign-off.
+# All assumptions (SM-1 through SM-5, SM3e, SM4d, SM9e, SM9f, SM11d) confirmed by Tony 2026-03-04.
+# Phase 2.5 governance: PASS (2026-03-04).
 #
 # Covers:
 #   First-run bootstrap (Rule SM1)
 #   StaffMember registration (Rule SM2)
 #   PIN setup — SetPIN (Rule SM3)
-#   PIN change — ChangePIN (Rule SM4) [SM-1 ASSUMED: current PIN required]
+#   PIN change — ChangePIN (Rule SM4) [SM-1 CONFIRMED — Tony 2026-03-04: current PIN required]
 #   Role assignment — additive model (Rule SM5)
 #   Role removal — explicit command, last PM guard (Rule SM6)
-#   Archive (Rule SM7) [SM-5 ASSUMED: no Provider cascade]
+#   Archive (Rule SM7) [SM-5 CONFIRMED — Tony 2026-03-04: no Provider cascade]
 #   Unarchive (Rule SM8)
-#   Active identity switching — session concern, no domain event (Rule SM9) [SM-4 ASSUMED]
+#   Active identity switching — session concern, no domain event (Rule SM9) [SM-4 CONFIRMED — Tony 2026-03-04]
 #   Last Practice Manager invariant (Rule SM10)
 #   Setup checklist — Staff Management step (Rule SM11)
 #
@@ -151,7 +152,7 @@ Feature: Staff Management
 
   # ─────────────────────────────────────────────────────────────
   # PIN CHANGE
-  # Rule SM4: ChangePIN requires current PIN verification [SM-1 ASSUMED]
+  # Rule SM4: ChangePIN requires current PIN verification [SM-1 CONFIRMED — Tony 2026-03-04]
   # ─────────────────────────────────────────────────────────────
 
   Scenario: Staff member changes PIN by providing correct current PIN
@@ -177,6 +178,32 @@ Feature: Staff Management
     When "Maria" submits ChangePIN with current_pin "5678" and new_pin "9999"
     Then no PINChanged event is recorded
     And an error is shown: "Cannot modify an archived staff member"
+
+  # ─────────────────────────────────────────────────────────────
+  # Rule SM4b: Practice Manager can reset any staff member's PIN
+  # [SM11d CONFIRMED — Tony 2026-03-04: PM reset resolves forgotten PIN without support call]
+  # ─────────────────────────────────────────────────────────────
+
+  Scenario: Practice Manager resets a staff member's forgotten PIN
+    Given an active staff member "Maria" has PIN "5678" set
+    And an active Practice Manager "Dr. Brown" exists
+    When "Dr. Brown" submits ResetPIN for "Maria"
+    Then a PINReset event is recorded for "Maria" with reset_by "Dr. Brown"
+    And "Maria" no longer has a PIN set
+    And "Maria" must use SetPIN before switching to active identity
+
+  Scenario: ResetPIN by a non-Practice-Manager is rejected
+    Given an active staff member "Maria" has PIN "5678" set
+    And an active staff member "Carlos" holds role "Staff"
+    When "Carlos" submits ResetPIN for "Maria"
+    Then no PINReset event is recorded
+    And an error is shown: "Only a Practice Manager can reset a PIN"
+
+  Scenario: Practice Manager cannot reset their own PIN via ResetPIN
+    Given an active Practice Manager "Dr. Brown" has PIN "1234" set
+    When "Dr. Brown" submits ResetPIN for "Dr. Brown"
+    Then no PINReset event is recorded
+    And an error is shown: "Use ChangePIN to update your own PIN"
 
   # ─────────────────────────────────────────────────────────────
   # ROLE ASSIGNMENT
@@ -257,7 +284,7 @@ Feature: Staff Management
 
   # ─────────────────────────────────────────────────────────────
   # ARCHIVE
-  # Rule SM7: Soft-delete; blocked if last active PM; no auto-cascade to Provider [SM-5 ASSUMED]
+  # Rule SM7: Soft-delete; blocked if last active PM; no auto-cascade to Provider [SM-5 CONFIRMED — Tony 2026-03-04]
   # ─────────────────────────────────────────────────────────────
 
   Scenario: Archiving an active staff member
@@ -328,7 +355,7 @@ Feature: Staff Management
 
   # ─────────────────────────────────────────────────────────────
   # ACTIVE IDENTITY SWITCHING
-  # Rule SM9: Session concern, not a domain event [SM-4 ASSUMED]
+  # Rule SM9: Session concern, not a domain event [SM-4 CONFIRMED — Tony 2026-03-04]
   # ─────────────────────────────────────────────────────────────
 
   Scenario: Staff member switches to active identity with correct PIN

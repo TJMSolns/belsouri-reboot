@@ -3,7 +3,7 @@
 **Date**: 2026-03-03
 **Participants**: Tony (Product Owner / Business), Claude (Developer / Tester)
 **Feature**: Staff Management context — StaffMember lifecycle, role assignment, PIN management, archive
-**Status**: Phase 2.2 complete — open questions flagged for Tony (SM-1 through SM-5); 2.3 pending Tony review
+**Status**: Phase 2 COMPLETE (2026-03-04) — all open questions confirmed by Tony; governance PASS
 
 ---
 
@@ -27,11 +27,11 @@ Decisions carried in from the Three Amigos session (2026-03-03):
 
 | ID | Assumption | Status |
 |----|-----------|--------|
-| SM-1 | ChangePIN requires the current PIN as verification | [ASSUMED — Tony to confirm] |
-| SM-2 | StaffMember contact info (phone, email, preferred channel) is optional at registration | [ASSUMED — Tony to confirm] |
-| SM-3 | RoleRemoved is an explicit command; roles are additive, not replaced on reassignment | [ASSUMED — Tony to confirm] |
-| SM-4 | PIN switching (IdentitySwitched) is NOT a domain event — it is a UX/session concern only | [ASSUMED — Tony to confirm] |
-| SM-5 | Archiving a StaffMember does NOT auto-archive the linked Practice Setup Provider | [ASSUMED — Tony to confirm] |
+| SM-1 | ChangePIN requires the current PIN as verification | [CONFIRMED — Tony 2026-03-04] |
+| SM-2 | StaffMember contact info (phone, email, preferred channel) is optional at registration | [CONFIRMED — Tony 2026-03-04] |
+| SM-3 | RoleRemoved is an explicit command; roles are additive, not replaced on reassignment | [CONFIRMED — Tony 2026-03-04] |
+| SM-4 | PIN switching (IdentitySwitched) is NOT a domain event — it is a UX/session concern only | [CONFIRMED — Tony 2026-03-04] |
+| SM-5 | Archiving a StaffMember does NOT auto-archive the linked Practice Setup Provider | [CONFIRMED — Tony 2026-03-04] |
 
 ---
 
@@ -64,7 +64,7 @@ Decisions carried in from the Three Amigos session (2026-03-03):
 
 ### Rule SM2: StaffMember registration requires a name and at least one role; contact info is optional
 
-**Rule**: RegisterStaffMember requires a non-empty name and a valid initial_role (PracticeManager, Provider, or Staff). Contact info (phone, email, preferred_contact_channel) is optional. [SM-2 ASSUMED: contact info is optional at registration, mirroring the Practice contact info pattern.]
+**Rule**: RegisterStaffMember requires a non-empty name and a valid initial_role (PracticeManager, Provider, or Staff). Contact info (phone, email, preferred_contact_channel) is optional. [SM-2 CONFIRMED — Tony 2026-03-04: contact info is optional at registration, mirroring the Practice contact info pattern.]
 
 | # | Example | Type |
 |---|---------|------|
@@ -93,7 +93,7 @@ Decisions carried in from the Three Amigos session (2026-03-03):
 | SM3b | System rejects identity switch for Maria because she has no PIN set → "PIN not set — please set your PIN before switching" | ❌ Negative path |
 | SM3c | Maria sets a 4-digit PIN → PINSet (minimum length boundary) | ✅ Boundary |
 | SM3d | Maria sets a 6-digit PIN → PINSet (maximum length boundary) | ✅ Boundary |
-| SM3e | [OPEN QUESTION — Tony to confirm] Can a PIN be fewer than 4 digits or more than 6 digits? Assumption: 4-6 digits required; outside this range is rejected. | ❓ Open question |
+| SM3e | PIN outside 4–6 digit range is rejected. Fewer than 4 or more than 6 digits → "PIN must be 4 to 6 digits" [CONFIRMED — Tony 2026-03-04] | ❌ Negative path |
 | SM3f | Maria attempts SetPIN when she already has a PIN set → Rejected: "PIN already set — use ChangePIN to update it" | ❌ Negative path |
 | SM3g | Archived StaffMember attempts SetPIN → Rejected: "Cannot modify an archived staff member" | ❌ Negative path |
 | SM3h | The raw PIN value never appears in any domain event — only the pin_hash is stored in PINSet | ✅ Happy path |
@@ -102,14 +102,14 @@ Decisions carried in from the Three Amigos session (2026-03-03):
 
 ### Rule SM4: Changing a PIN requires the current PIN as verification
 
-**Rule**: ChangePIN replaces an existing PIN. The command requires current_pin (to verify identity before allowing the change) and new_pin. [SM-1 ASSUMED: ChangePIN requires current PIN as verification, consistent with standard PIN-change UX.]
+**Rule**: ChangePIN replaces an existing PIN. The command requires current_pin (to verify identity before allowing the change) and new_pin. [SM-1 CONFIRMED — Tony 2026-03-04: ChangePIN requires current PIN as verification, consistent with standard PIN-change UX.]
 
 | # | Example | Type |
 |---|---------|------|
 | SM4a | Maria provides correct current PIN "5678" and new PIN "9999" → PINChanged event with new pin_hash | ✅ Happy path |
 | SM4b | Maria provides incorrect current PIN → Rejected: "Current PIN does not match" | ❌ Negative path |
 | SM4c | Maria attempts ChangePIN with no PIN set yet → Rejected: "No PIN set — use SetPIN to establish a PIN first" | ❌ Negative path |
-| SM4d | [OPEN QUESTION — Tony to confirm] Can new PIN be the same as the current PIN? Assumption: allowed — no PIN history enforcement at MVP. | ❓ Open question |
+| SM4d | New PIN may be the same as the current PIN — no PIN history enforcement at MVP [CONFIRMED — Tony 2026-03-04] | ✅ Edge case |
 | SM4e | Archived StaffMember attempts ChangePIN → Rejected: "Cannot modify an archived staff member" | ❌ Negative path |
 | SM4f | New PIN must meet same length requirements as SetPIN (4-6 digits, per SM3e assumption) | ✅ Boundary |
 
@@ -121,7 +121,7 @@ Decisions carried in from the Three Amigos session (2026-03-03):
 
 ### Rule SM5: Roles are additive and not mutually exclusive
 
-**Rule**: A StaffMember can hold any combination of PracticeManager, Provider, and Staff simultaneously. AssignRole adds a role to the set; it does not replace existing roles. A StaffMember cannot hold the same role twice. [SM-3 ASSUMED: RoleRemoved is an explicit command; roles are additive not replaced.]
+**Rule**: A StaffMember can hold any combination of PracticeManager, Provider, and Staff simultaneously. AssignRole adds a role to the set; it does not replace existing roles. A StaffMember cannot hold the same role twice. [SM-3 CONFIRMED — Tony 2026-03-04: RoleRemoved is an explicit command; roles are additive not replaced.]
 
 | # | Example | Type |
 |---|---------|------|
@@ -142,7 +142,7 @@ Decisions carried in from the Three Amigos session (2026-03-03):
 |---|---------|------|
 | SM6a | Dr. Brown holds Provider + PracticeManager. PM calls RemoveRole(Dr. Brown, Provider) → RoleRemoved(Provider). Dr. Brown now holds only PracticeManager. | ✅ Happy path |
 | SM6b | Maria holds only the Staff role. PM attempts RemoveRole(Maria, Staff) → Rejected: "Cannot remove the last role from a staff member" | ❌ Negative path |
-| SM6c | Dr. Spence is the only active PracticeManager. PM (another account) attempts RemoveRole(Dr. Spence, PracticeManager) → Rejected: "Cannot remove the PracticeManager role from the last active Practice Manager" | ❌ Negative path |
+| SM6c | Dr. Spence is the only active PracticeManager. PM (another active StaffMember) attempts RemoveRole(Dr. Spence, PracticeManager) → Rejected: "Cannot remove the PracticeManager role from the last active Practice Manager" | ❌ Negative path |
 | SM6d | Two active PracticeManagers exist. PM removes PracticeManager from one of them → RoleRemoved(PracticeManager). Remaining PM is the last active PM. | ✅ Happy path |
 | SM6e | PM attempts RemoveRole for a role the StaffMember does not hold → Rejected: "Staff member does not hold the [role] role" | ❌ Negative path |
 | SM6f | PM attempts RemoveRole on archived StaffMember → Rejected: "Cannot modify an archived staff member" | ❌ Negative path |
@@ -162,7 +162,7 @@ Decisions carried in from the Three Amigos session (2026-03-03):
 | SM7a | PM archives receptionist Maria → StaffMemberArchived. Maria no longer appears in active staff list. | ✅ Happy path |
 | SM7b | Dr. Spence is the only active PracticeManager. PM attempts to archive Dr. Spence → Rejected: "Cannot archive the last active Practice Manager. Assign the Practice Manager role to another staff member first." | ❌ Negative path |
 | SM7c | PM attempts to archive an already-archived StaffMember → Rejected: "Staff member is already archived" | ❌ Negative path |
-| SM7d | PM archives a StaffMember who holds the Provider role → StaffMemberArchived. The linked Practice Setup Provider aggregate is NOT automatically archived. [SM-5 ASSUMED: no cascade.] | ✅ Edge case |
+| SM7d | PM archives a StaffMember who holds the Provider role → StaffMemberArchived. The linked Practice Setup Provider aggregate is NOT automatically archived. [SM-5 CONFIRMED — Tony 2026-03-04: no cascade.] | ✅ Edge case |
 | SM7e | Archived StaffMember's historical attributions (e.g., which appointments they booked) are preserved and visible in history | ✅ Happy path |
 | SM7f | Two PracticeManagers exist. PM archives one of them → StaffMemberArchived. The other PM remains active. | ✅ Happy path |
 | SM7g | PM archives a StaffMember who holds all three roles but is not the last PM → StaffMemberArchived | ✅ Edge case |
@@ -188,7 +188,7 @@ Decisions carried in from the Three Amigos session (2026-03-03):
 
 ### Rule SM9: PIN switching to active identity is a session concern, not a domain event
 
-**Rule**: A StaffMember enters their PIN to become the active identity in the application. The application verifies the PIN against the stored hash and records the active identity in session/application state. This does not produce a domain event. [SM-4 ASSUMED: IdentitySwitched is not a domain event.]
+**Rule**: A StaffMember enters their PIN to become the active identity in the application. The application verifies the PIN against the stored hash and records the active identity in session/application state. This does not produce a domain event. [SM-4 CONFIRMED — Tony 2026-03-04: IdentitySwitched is not a domain event.]
 
 | # | Example | Type |
 |---|---------|------|
@@ -196,8 +196,8 @@ Decisions carried in from the Three Amigos session (2026-03-03):
 | SM9b | Maria enters incorrect PIN → Rejected: "Incorrect PIN" | ❌ Negative path |
 | SM9c | Maria has no PIN set → Cannot switch to active identity: "PIN not set — please set your PIN" | ❌ Negative path |
 | SM9d | Archived StaffMember's PIN → Cannot select an archived staff member as the active identity | ❌ Negative path |
-| SM9e | [OPEN QUESTION — Tony to confirm] Is there a lockout after N incorrect PIN attempts? Assumption: No lockout at MVP — shared workstation with trusted staff. | ❓ Open question |
-| SM9f | [OPEN QUESTION — Tony to confirm] What is shown on the identity switching screen — a list of all active staff members? Only those with PINs set? Assumption: list shows all active StaffMembers; those without PINs show a "PIN not set" indicator rather than a PIN entry field. | ❓ Open question |
+| SM9e | No lockout after incorrect PIN attempts at MVP — shared workstation, trusted staff environment [CONFIRMED — Tony 2026-03-04] | ✅ Edge case |
+| SM9f | Identity switching screen shows all active StaffMembers; those without PINs show a "set PIN" indicator rather than a PIN entry field [CONFIRMED — Tony 2026-03-04] | ✅ Edge case |
 
 ---
 
@@ -233,7 +233,7 @@ Decisions carried in from the Three Amigos session (2026-03-03):
 | SM11a | Dr. Spence is registered as PM via ClaimPracticeManagerRole but has no PIN set → Setup step incomplete | ✅ Happy path |
 | SM11b | Dr. Spence has PracticeManager role and PIN set → Setup step complete | ✅ Happy path |
 | SM11c | Dr. Spence (PM with PIN) is archived, leaving Dr. Brown (PM with PIN) as the only PM → Setup step remains complete | ✅ Edge case |
-| SM11d | Only PM's PIN is removed [OPEN QUESTION — Tony to confirm: is there a way to remove/reset a PIN? Assumption: No. Changing a PIN requires knowing the current PIN. There is no admin PIN reset at MVP.] → Not applicable per assumption | ❓ Open question |
+| SM11d | Practice Manager resets a StaffMember's forgotten PIN without knowing their current PIN → PINReset event; StaffMember can set a new PIN on next identity switch [CONFIRMED — Tony 2026-03-04] | ✅ Edge case |
 
 ---
 
@@ -241,17 +241,19 @@ Decisions carried in from the Three Amigos session (2026-03-03):
 
 | # | Question | Artifact Ref | Assumption Made |
 |---|----------|-------------|-----------------|
-| SM-1 | ChangePIN flow: is current PIN required for verification? | SM4, Rule SM4 | Yes — current PIN required; consistent with standard PIN-change UX |
-| SM-2 | Is contact info optional at registration? | SM2b, Rule SM2 | Yes — optional; mirrors Practice contact info pattern |
-| SM-3 | Is RoleRemoved an explicit command, or do roles get replaced on reassignment? | SM5, Rule SM5/SM6 | Explicit command; roles are additive; must be explicitly removed |
-| SM-4 | Is IdentitySwitched a domain event? | SM9, Rule SM9 | No — PIN switching is a session/UX concern, not stored as a domain event |
-| SM-5 | Does archiving a StaffMember auto-archive the linked Practice Setup Provider? | SM7d, Rule SM7 | No automatic cascade at MVP; contexts are independent |
-| SM3e | PIN length constraints: allowed range? | Rule SM3 | 4-6 digits; outside this range rejected |
-| SM4d | Can new PIN equal current PIN on change? | Rule SM4 | Allowed — no PIN history enforcement at MVP |
-| SM9e | PIN lockout after N incorrect attempts? | Rule SM9 | No lockout at MVP — shared workstation, trusted staff |
-| SM9f | Identity switching screen: who is listed? | Rule SM9 | All active StaffMembers; PIN-less members show "PIN not set" indicator |
-| SM11d | Can a PIN be removed or reset by admin? | Rule SM11 | No PIN reset at MVP; ChangePIN requires knowing current PIN |
+| SM-1 | ChangePIN flow: is current PIN required for verification? | SM4, Rule SM4 | Yes — current PIN required [CONFIRMED — Tony 2026-03-04] |
+| SM-2 | Is contact info optional at registration? | SM2b, Rule SM2 | Yes — optional [CONFIRMED — Tony 2026-03-04] |
+| SM-3 | Is RoleRemoved an explicit command, or do roles get replaced on reassignment? | SM5, Rule SM5/SM6 | Explicit command; additive [CONFIRMED — Tony 2026-03-04] |
+| SM-4 | Is IdentitySwitched a domain event? | SM9, Rule SM9 | No — session/UX concern only [CONFIRMED — Tony 2026-03-04] |
+| SM-5 | Does archiving a StaffMember auto-archive the linked Practice Setup Provider? | SM7d, Rule SM7 | No cascade; contexts independent [CONFIRMED — Tony 2026-03-04] |
+| SM3e | PIN length constraints: allowed range? | Rule SM3 | 4-6 digits [CONFIRMED — Tony 2026-03-04] |
+| SM4d | Can new PIN equal current PIN on change? | Rule SM4 | Allowed — no PIN history enforcement [CONFIRMED — Tony 2026-03-04] |
+| SM9e | PIN lockout after N incorrect attempts? | Rule SM9 | No lockout at MVP [CONFIRMED — Tony 2026-03-04] |
+| SM9f | Identity switching screen: who is listed? | Rule SM9 | All active StaffMembers; PIN-less show "set PIN" indicator [CONFIRMED — Tony 2026-03-04] |
+| SM11d | Can a Practice Manager reset a StaffMember's PIN? | Rule SM11 | Yes — PM can reset any staff PIN; no current PIN required; resolves forgotten PIN without support call [CONFIRMED — Tony 2026-03-04] |
 
 ---
 
-**Phase 2.3 Acceptance Criteria Review**: All business rules validated against StaffMember aggregate doc and event storming output. Ubiquitous language used throughout (no banned terms: login, password, user, account, delete). Open questions SM-1 through SM-5 flagged with stated assumptions. SM3e, SM4d, SM9e, SM9f, SM11d are new questions surfaced during Example Mapping — also flagged for Tony. Pending Tony sign-off on all assumptions before Phase 2.5 governance review.
+**Phase 2.3 Acceptance Criteria Review**: All business rules validated against StaffMember aggregate doc and event storming output. Ubiquitous language used throughout (no banned terms: login, password, user, account, delete). All open questions (SM-1 through SM-5, SM3e, SM4d, SM9e, SM9f, SM11d) confirmed by Tony 2026-03-04. Phase 2.3 COMPLETE.
+
+**Phase 2.5 Governance Review**: PASS (2026-03-04). All events and commands consistent with aggregate doc. All invariants covered. No banned terms. No orphan event or command references.

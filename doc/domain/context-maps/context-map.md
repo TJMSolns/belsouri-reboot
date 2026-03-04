@@ -1,6 +1,6 @@
 # Context Map
 
-**Last Updated**: 2026-03-03
+**Last Updated**: 2026-03-04
 
 ---
 
@@ -8,7 +8,7 @@
 
 This map shows the bounded contexts in Belsouri, their relationships, and the integration patterns between them. Updated as new contexts are discovered through Phase 1 ceremonies.
 
-Practice Setup and Licensing have completed domain discovery. Other contexts are listed based on the development plan with their expected relationships.
+All MVP bounded contexts have completed Phase 1 and Phase 2 ceremonies. The team is ready to begin Track A — Infrastructure Vertical Slice.
 
 ---
 
@@ -16,11 +16,12 @@ Practice Setup and Licensing have completed domain discovery. Other contexts are
 
 | Context | Status | Purpose |
 |---------|--------|---------|
-| **Licensing** | Discovered (Phase 1 complete) | Machine-bound license validation, eval period, module gating, degraded mode |
-| **Practice Setup** | Discovered (Phase 1 complete) | Offices, providers, procedure types, practice identity |
-| **Staff Scheduling** | Planned (Phase 3) | Provider availability patterns, working hours, exceptions |
-| **Patient Management** | Planned (Phase 4) | Patient registration, demographics, search |
-| **Patient Scheduling** | Planned (Phase 5) | Appointment booking, today's schedule, cancellations |
+| **Licensing** | Phase 1 + Phase 2 complete — ready for Track A | Machine-bound license validation, eval period, module gating, degraded mode |
+| **Practice Setup** | Phase 1 + Phase 2 complete — ready for Track A | Offices, providers, procedure types, practice identity |
+| **Staff Management** | Phase 1 + Phase 2 complete — ready for Track A | Staff records, roles, credentials, employment status |
+| **Staff Scheduling** | Phase 1 + Phase 2 complete — ready for Track A (projection-first model confirmed) | Provider availability patterns, working hours, exceptions |
+| **Patient Management** | Phase 1 + Phase 2 complete — ready for Track A | Patient registration, demographics, search |
+| **Patient Scheduling** | Phase 1 + Phase 2 complete — ready for Track A | Appointment booking, today's schedule, cancellations |
 | **Clinical Records** | Planned (Post-MVP) | Charting, treatment plans, clinical notes |
 | **Billing/Insurance** | Planned (Post-MVP) | Invoicing, insurance claims, payments |
 | **Jamaica EHR Integration** | Planned (Post-MVP) | Regulatory compliance, data export |
@@ -33,22 +34,26 @@ Practice Setup and Licensing have completed domain discovery. Other contexts are
 ```mermaid
 graph TD
     LS_EXT["License Server\n(External — OHS/PL)"]
-    LIC["Licensing\n(upstream, discovered)"]
-    PS["Practice Setup\n(upstream, discovered)"]
-    SS["Staff Scheduling\n(downstream, planned)"]
-    PM["Patient Management\n(downstream, planned)"]
-    PSched["Patient Scheduling\n(downstream, planned)"]
+    LIC["Licensing\n(upstream, ready for Track A)"]
+    PS["Practice Setup\n(upstream, ready for Track A)"]
+    SM["Staff Management\n(downstream, ready for Track A)"]
+    SS["Staff Scheduling\n(downstream, ready for Track A)"]
+    PM["Patient Management\n(downstream, ready for Track A)"]
+    PSched["Patient Scheduling\n(downstream, ready for Track A)"]
     CR["Clinical Records\n(post-MVP)"]
     BI["Billing/Insurance\n(post-MVP)"]
 
     LS_EXT -->|"OHS/PL → ACL"| LIC
     LIC -->|"OHS/PL (feature gate)"| PS
+    LIC -->|"OHS/PL (feature gate)"| SM
     LIC -->|"OHS/PL (feature gate)"| SS
     LIC -->|"OHS/PL (feature gate)"| PM
     LIC -->|"OHS/PL (feature gate)"| PSched
+    PS -->|"OHS/PL"| SM
     PS -->|"OHS/PL"| SS
     PS -->|"OHS/PL"| PM
     PS -->|"OHS/PL"| PSched
+    SM -->|"OHS/PL"| SS
     SS -->|"CF"| PSched
     PM -->|"CF"| PSched
     PSched -->|"OHS/PL (future)"| CR
@@ -99,7 +104,7 @@ graph TD
 | **Pattern** | Open Host Service / Published Language (feature gate) |
 | **What flows** | Module access decisions (`scheduling` module required) |
 | **Integration** | Same pattern as Licensing → Practice Setup. Staff Scheduling reads `license_status` projection. |
-| **Contract** | TBD during Phase 3 ceremonies. |
+| **Contract** | Confirmed during Phase 2 ceremonies. Staff Scheduling reads `license_status.modules` and `license_status.status`. |
 
 ---
 
@@ -111,7 +116,7 @@ graph TD
 | **Pattern** | Open Host Service / Published Language (feature gate) |
 | **What flows** | Module access decisions (`core` module required) |
 | **Integration** | Same pattern as Licensing → Practice Setup. |
-| **Contract** | TBD during Phase 4 ceremonies. |
+| **Contract** | Confirmed during Phase 2 ceremonies. Patient Management reads `license_status.modules` and `license_status.status`. |
 
 ---
 
@@ -123,7 +128,47 @@ graph TD
 | **Pattern** | Open Host Service / Published Language (feature gate) |
 | **What flows** | Module access decisions (`scheduling` module required) |
 | **Integration** | Same pattern as other Licensing downstream relationships. |
-| **Contract** | TBD during Phase 5 ceremonies. |
+| **Contract** | Confirmed during Phase 2 ceremonies. Patient Scheduling reads `license_status.modules` and `license_status.status`. |
+
+---
+
+### Licensing → Staff Management
+
+| Property | Value |
+|----------|-------|
+| **Direction** | Licensing is upstream; Staff Management is downstream |
+| **Pattern** | Open Host Service / Published Language (feature gate) |
+| **What flows** | Module access decisions (`core` module required) |
+| **Integration** | Staff Management reads `license_status` projection. Write operations blocked when module is Degraded/Expired/Invalid. |
+| **Contract** | Confirmed during Phase 2 ceremonies. Staff Management reads `license_status.modules` and `license_status.status`. |
+
+---
+
+### Practice Setup → Staff Management
+
+| Property | Value |
+|----------|-------|
+| **Direction** | Practice Setup is upstream; Staff Management is downstream |
+| **Pattern** | Open Host Service / Published Language |
+| **What flows** | Office list (for staff-office assignment), Provider types |
+| **Integration** | Staff Management reads Practice Setup projections to know which offices exist when assigning staff members. |
+| **Contract** | Confirmed during Phase 2 ceremonies. Minimal -- office_id and name needed for assignment. |
+
+**Why OHS/PL**: Practice Setup publishes a stable set of offices and providers. Staff Management consumes them without translation.
+
+---
+
+### Staff Management → Staff Scheduling
+
+| Property | Value |
+|----------|-------|
+| **Direction** | Staff Management is upstream; Staff Scheduling is downstream |
+| **Pattern** | Open Host Service / Published Language |
+| **What flows** | Staff identity (id, name, role) for availability pattern assignment |
+| **Integration** | Staff Scheduling reads Staff Management projections to know which staff members have schedules to manage. |
+| **Contract** | Confirmed during Phase 2 ceremonies. Staff Scheduling reads staff identity from Staff Management's projection. |
+
+**Why OHS/PL**: Staff Management publishes a stable staff roster. Staff Scheduling consumes it without translation. Staff Management does not know or care about Staff Scheduling.
 
 ---
 
@@ -135,11 +180,11 @@ graph TD
 | **Pattern** | Open Host Service / Published Language |
 | **What flows** | Office configuration (hours, chair count), Provider registration and type |
 | **Integration** | Staff Scheduling reads Practice Setup projections to know which offices and providers exist. It does not modify Practice Setup data. |
-| **Contract** | Staff Scheduling conforms to Practice Setup's event schema and projection format. |
+| **Contract** | Staff Scheduling conforms to Practice Setup's event schema and projection format. Confirmed during Phase 2 ceremonies. |
 
 **Why OHS/PL**: Practice Setup publishes a stable set of events and projections. Staff Scheduling consumes them as-is without translation. The "language" is shared (same Office, Provider terms). Practice Setup doesn't know or care about Staff Scheduling.
 
-**Boundary note**: Provider availability (weekly schedule per office) and exceptions (vacations) are currently modeled in Practice Setup because they are part of provider configuration. If Staff Scheduling needs richer scheduling concepts (shift patterns, approval workflows, time-off requests with denial logic), availability and exceptions may migrate to Staff Scheduling. This is a boundary to revisit during Phase 3 ceremonies.
+**Boundary note**: Provider availability (weekly schedule per office) and exceptions (vacations) are currently modeled in Practice Setup because they are part of provider configuration. If Staff Scheduling needs richer scheduling concepts (shift patterns, approval workflows, time-off requests with denial logic), availability and exceptions may migrate to Staff Scheduling. This boundary was reviewed during Phase 2 ceremonies and retained as-is for MVP.
 
 ---
 
@@ -179,7 +224,7 @@ graph TD
 | **Pattern** | Conformist |
 | **What flows** | Resolved provider schedules (combining weekly patterns with exceptions) |
 | **Integration** | Patient Scheduling needs to know "is this provider available at this office at this time?" Staff Scheduling provides the authoritative answer. |
-| **Contract** | TBD during Phase 3 ceremonies. |
+| **Contract** | Confirmed during Phase 2 ceremonies. Patient Scheduling reads resolved provider schedules from Staff Scheduling's projection. |
 
 **Why Conformist**: Patient Scheduling has no leverage to change how Staff Scheduling models availability. It conforms to whatever Staff Scheduling publishes.
 
@@ -193,7 +238,7 @@ graph TD
 | **Pattern** | Conformist |
 | **What flows** | Patient identity (id, name) for booking |
 | **Integration** | Patient Scheduling needs a patient to book an appointment for. It reads Patient Management's projection. |
-| **Contract** | TBD during Phase 4 ceremonies. |
+| **Contract** | Confirmed during Phase 2 ceremonies. Patient Scheduling reads patient identity (id, name) from Patient Management's projection. |
 
 ---
 
@@ -212,15 +257,18 @@ graph TD
 ```
 License Server (external) ──► Licensing ──► All MVP Contexts
 
-Infrastructure ──┬──► Practice Setup ──► Staff Scheduling ──┬──► Patient Scheduling
-                 │                                          │
-                 └──► Patient Management ───────────────────┘
+Infrastructure ──┬──► Practice Setup ──┬──► Staff Management ──► Staff Scheduling ──┬──► Patient Scheduling
+                 │                     │                                             │
+                 │                     └─────────────────────────────────────────────┘
+                 │
+                 └──► Patient Management ────────────────────────────────────────────► Patient Scheduling
 ```
 
 - **Licensing** gates feature access across all MVP contexts; implemented in Track A infrastructure
 - **Practice Setup** requires Infrastructure (event store, projections, Tauri commands)
-- **Staff Scheduling** requires Practice Setup (offices and providers must exist)
-- **Patient Management** requires Infrastructure (not Practice Setup — can run in parallel)
+- **Staff Management** requires Practice Setup (offices must exist for assignment)
+- **Staff Scheduling** requires Practice Setup (offices/providers) and Staff Management (staff roster)
+- **Patient Management** requires Infrastructure (not Practice Setup -- can run in parallel)
 - **Patient Scheduling** requires both Staff Scheduling (available slots) and Patient Management (patients to book)
 
 ---
@@ -231,14 +279,14 @@ Boundaries that may shift as we learn more during future ceremonies:
 
 | Boundary | Current | May Shift To | Trigger |
 |----------|---------|-------------|---------|
-| Provider availability + exceptions | Practice Setup | Staff Scheduling | If Phase 3 needs richer scheduling (shift patterns, approval workflows) |
+| Provider availability + exceptions | Practice Setup | Staff Scheduling | If implementation reveals need for richer scheduling (shift patterns, approval workflows) -- boundary reviewed and retained for MVP during Phase 2 ceremonies |
 | Procedure type ↔ Billing codes | Practice Setup owns procedure types | Billing context may add fee schedules and insurance codes | Post-MVP when Billing context is discovered |
 | Office address | Practice aggregate has practice address; Office has no address | Office may need its own address | Multi-location practices with distinct addresses |
 | Module gating mechanism | Licensing projection read by each context directly | Dedicated cross-cutting service / middleware | If module checks become complex enough to warrant centralization |
 
 ---
 
-**Next update**: Expand relationships when Staff Scheduling and Patient Management complete their Phase 1 ceremonies.
+**Next update**: Expand Staff Management relationship details and update contract specifics as Track A implementation proceeds.
 
 ---
 
