@@ -2,12 +2,26 @@ pub mod app_state;
 pub mod db;
 pub mod events;
 pub mod licensing;
+pub mod practice_setup;
 pub mod projections;
 
 use std::sync::Mutex;
 use tauri::Manager;
 use app_state::AppState;
 use licensing::commands::{activate_license, get_license_status, get_practice_id, startup_license_check};
+use practice_setup::commands::{
+    update_practice_details, get_practice,
+    create_office, rename_office, update_office_chair_count,
+    set_office_hours, close_office_day, archive_office, list_offices, get_office,
+    register_provider, rename_provider, change_provider_type,
+    assign_provider_to_office, remove_provider_from_office,
+    set_provider_availability, clear_provider_availability,
+    set_provider_exception, remove_provider_exception,
+    archive_provider, unarchive_provider, list_providers, get_provider,
+    define_procedure_type, update_procedure_type,
+    deactivate_procedure_type, reactivate_procedure_type,
+    seed_default_procedure_types, list_procedure_types,
+};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -22,6 +36,17 @@ pub fn run() {
                 get_license_status,
                 get_practice_id,
                 activate_license,
+                update_practice_details, get_practice,
+                create_office, rename_office, update_office_chair_count,
+                set_office_hours, close_office_day, archive_office, list_offices, get_office,
+                register_provider, rename_provider, change_provider_type,
+                assign_provider_to_office, remove_provider_from_office,
+                set_provider_availability, clear_provider_availability,
+                set_provider_exception, remove_provider_exception,
+                archive_provider, unarchive_provider, list_providers, get_provider,
+                define_procedure_type, update_procedure_type,
+                deactivate_procedure_type, reactivate_procedure_type,
+                seed_default_procedure_types, list_procedure_types,
             ])
             .export(
                 Typescript::default().bigint(BigIntExportBehavior::Number),
@@ -58,6 +83,17 @@ pub fn run() {
             get_license_status,
             get_practice_id,
             activate_license,
+            update_practice_details, get_practice,
+            create_office, rename_office, update_office_chair_count,
+            set_office_hours, close_office_day, archive_office, list_offices, get_office,
+            register_provider, rename_provider, change_provider_type,
+            assign_provider_to_office, remove_provider_from_office,
+            set_provider_availability, clear_provider_availability,
+            set_provider_exception, remove_provider_exception,
+            archive_provider, unarchive_provider, list_providers, get_provider,
+            define_procedure_type, update_procedure_type,
+            deactivate_procedure_type, reactivate_procedure_type,
+            seed_default_procedure_types, list_procedure_types,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
