@@ -1,0 +1,46 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build outputs
+dist/
+build/
+target/
+
+# Rust
+src-tauri/target/
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# Editor
+.vscode/settings.json
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Tauri
+src-tauri/WixTools/
+*.msi
+*.deb
+*.rpm
+*.dmg
+*.AppImage
+
+# Logs
+*.log
+npm-debug.log*
+
+# Generated TypeScript bindings (regenerated at build time)
+src/lib/bindings.ts
+
+# SQLite databases (local data, never committed)
+*.db
+*.db-shm
+*.db-wal
