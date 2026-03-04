@@ -96,6 +96,25 @@ pub struct ProcedureTypeRow {
     pub is_active: bool,
 }
 
+// ── Staff Management row types ────────────────────────────────────────────────
+
+#[derive(Debug, Clone)]
+pub struct StaffMemberRow {
+    pub staff_member_id: String,
+    pub name: String,
+    pub phone: Option<String>,
+    pub email: Option<String>,
+    pub preferred_contact_channel: Option<String>,
+    pub pin_hash: Option<String>,
+    pub archived: bool,
+}
+
+#[derive(Debug, Clone)]
+pub struct StaffRoleRow {
+    pub staff_member_id: String,
+    pub role: String,
+}
+
 // ── Patient Management row types ──────────────────────────────────────────────
 
 #[derive(Debug, Clone)]
@@ -231,6 +250,20 @@ impl ProjectionStore {
                 category TEXT NOT NULL,
                 default_duration_minutes INTEGER NOT NULL,
                 is_active INTEGER NOT NULL DEFAULT 1
+            );
+            CREATE TABLE IF NOT EXISTS staff_members (
+                staff_member_id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                phone TEXT,
+                email TEXT,
+                preferred_contact_channel TEXT,
+                pin_hash TEXT,
+                archived INTEGER NOT NULL DEFAULT 0
+            );
+            CREATE TABLE IF NOT EXISTS staff_member_roles (
+                staff_member_id TEXT NOT NULL,
+                role TEXT NOT NULL,
+                PRIMARY KEY (staff_member_id, role)
             );
             CREATE TABLE IF NOT EXISTS patients (
                 patient_id TEXT PRIMARY KEY,
@@ -704,6 +737,127 @@ impl ProjectionStore {
             is_active: row.get::<_, i32>(4)? != 0,
         }))?.collect::<SqlResult<Vec<_>>>()?;
         Ok(rows)
+    }
+
+    // ── Staff Management rows ─────────────────────────────────────────────────
+
+    pub fn upsert_staff_member(&self, row: &StaffMemberRow) -> Result<()> {
+        self.conn.execute(
+            "INSERT INTO staff_members
+             (staff_member_id, name, phone, email, preferred_contact_channel, pin_hash, archived)
+             VALUES (?1,?2,?3,?4,?5,?6,?7)
+             ON CONFLICT(staff_member_id) DO UPDATE SET
+                 name = excluded.name, phone = excluded.phone, email = excluded.email,
+                 preferred_contact_channel = excluded.preferred_contact_channel,
+                 pin_hash = excluded.pin_hash, archived = excluded.archived",
+            params![row.staff_member_id, row.name, row.phone, row.email,
+                    row.preferred_contact_channel, row.pin_hash, row.archived as i32],
+        )?;
+        Ok(())
+    }
+
+    pub fn set_staff_member_pin(&self, staff_member_id: &str, pin_hash: Option<&str>) -> Result<()> {
+        self.conn.execute(
+            "UPDATE staff_members SET pin_hash = ?2 WHERE staff_member_id = ?1",
+            params![staff_member_id, pin_hash],
+        )?;
+        Ok(())
+    }
+
+    pub fn set_staff_member_archived(&self, staff_member_id: &str, archived: bool) -> Result<()> {
+        self.conn.execute(
+            "UPDATE staff_members SET archived = ?2 WHERE staff_member_id = ?1",
+            params![staff_member_id, archived as i32],
+        )?;
+        Ok(())
+    }
+
+    pub fn add_staff_role(&self, staff_member_id: &str, role: &str) -> Result<()> {
+        self.conn.execute(
+            "INSERT OR IGNORE INTO staff_member_roles (staff_member_id, role) VALUES (?1, ?2)",
+            params![staff_member_id, role],
+        )?;
+        Ok(())
+    }
+
+    pub fn remove_staff_role(&self, staff_member_id: &str, role: &str) -> Result<()> {
+        self.conn.execute(
+            "DELETE FROM staff_member_roles WHERE staff_member_id = ?1 AND role = ?2",
+            params![staff_member_id, role],
+        )?;
+        Ok(())
+    }
+
+    pub fn list_staff_roles(&self, staff_member_id: &str) -> Result<Vec<String>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT role FROM staff_member_roles WHERE staff_member_id = ?1"
+        )?;
+        let roles = stmt.query_map(params![staff_member_id], |row| row.get(0))?
+            .collect::<SqlResult<Vec<String>>>()?;
+        Ok(roles)
+    }
+
+    pub fn get_staff_member(&self, staff_member_id: &str) -> Result<Option<StaffMemberRow>> {
+        let r: SqlResult<StaffMemberRow> = self.conn.query_row(
+            "SELECT staff_member_id, name, phone, email, preferred_contact_channel, pin_hash, archived
+             FROM staff_members WHERE staff_member_id = ?1",
+            params![staff_member_id],
+            |row| Ok(StaffMemberRow {
+                staff_member_id: row.get(0)?,
+                name: row.get(1)?,
+                phone: row.get(2)?,
+                email: row.get(3)?,
+                preferred_contact_channel: row.get(4)?,
+                pin_hash: row.get(5)?,
+                archived: row.get::<_, i32>(6)? != 0,
+            }),
+        );
+        match r {
+            Ok(v) => Ok(Some(v)),
+            Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+            Err(e) => Err(e.into()),
+        }
+    }
+
+    pub fn list_staff_members(&self) -> Result<Vec<StaffMemberRow>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT staff_member_id, name, phone, email, preferred_contact_channel, pin_hash, archived
+             FROM staff_members ORDER BY name ASC"
+        )?;
+        let rows = stmt.query_map([], |row| Ok(StaffMemberRow {
+            staff_member_id: row.get(0)?,
+            name: row.get(1)?,
+            phone: row.get(2)?,
+            email: row.get(3)?,
+            preferred_contact_channel: row.get(4)?,
+            pin_hash: row.get(5)?,
+            archived: row.get::<_, i32>(6)? != 0,
+        }))?.collect::<SqlResult<Vec<_>>>()?;
+        Ok(rows)
+    }
+
+    /// Returns count of active (non-archived) PracticeManagers.
+    pub fn count_active_practice_managers(&self) -> Result<i64> {
+        let count: i64 = self.conn.query_row(
+            "SELECT COUNT(*) FROM staff_members sm
+             JOIN staff_member_roles r ON sm.staff_member_id = r.staff_member_id
+             WHERE r.role = 'PracticeManager' AND sm.archived = 0",
+            [],
+            |row| row.get(0),
+        )?;
+        Ok(count)
+    }
+
+    /// Returns true if there is at least one active PracticeManager with a PIN set.
+    pub fn has_active_pm_with_pin(&self) -> Result<bool> {
+        let count: i64 = self.conn.query_row(
+            "SELECT COUNT(*) FROM staff_members sm
+             JOIN staff_member_roles r ON sm.staff_member_id = r.staff_member_id
+             WHERE r.role = 'PracticeManager' AND sm.archived = 0 AND sm.pin_hash IS NOT NULL",
+            [],
+            |row| row.get(0),
+        )?;
+        Ok(count > 0)
     }
 
     // ── Patient Management rows ───────────────────────────────────────────────

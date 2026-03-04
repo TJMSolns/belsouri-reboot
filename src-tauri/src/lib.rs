@@ -4,6 +4,7 @@ pub mod events;
 pub mod licensing;
 pub mod practice_setup;
 pub mod patient_management;
+pub mod staff_management;
 pub mod projections;
 
 use std::sync::Mutex;
@@ -26,6 +27,11 @@ use practice_setup::commands::{
 use patient_management::commands::{
     register_patient, update_patient_demographics, update_patient_contact_info,
     add_patient_note, archive_patient, unarchive_patient, search_patients, get_patient,
+};
+use staff_management::commands::{
+    claim_practice_manager_role, register_staff_member, assign_role, remove_role,
+    set_pin, change_pin, reset_pin, archive_staff_member, unarchive_staff_member,
+    verify_staff_pin, list_staff_members, get_staff_member_dto, get_staff_setup_status,
 };
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -54,6 +60,9 @@ pub fn run() {
                 seed_default_procedure_types, list_procedure_types,
                 register_patient, update_patient_demographics, update_patient_contact_info,
                 add_patient_note, archive_patient, unarchive_patient, search_patients, get_patient,
+                claim_practice_manager_role, register_staff_member, assign_role, remove_role,
+                set_pin, change_pin, reset_pin, archive_staff_member, unarchive_staff_member,
+                verify_staff_pin, list_staff_members, get_staff_member_dto, get_staff_setup_status,
             ])
             .export(
                 Typescript::default().bigint(BigIntExportBehavior::Number),
@@ -103,6 +112,9 @@ pub fn run() {
             seed_default_procedure_types, list_procedure_types,
             register_patient, update_patient_demographics, update_patient_contact_info,
             add_patient_note, archive_patient, unarchive_patient, search_patients, get_patient,
+            claim_practice_manager_role, register_staff_member, assign_role, remove_role,
+            set_pin, change_pin, reset_pin, archive_staff_member, unarchive_staff_member,
+            verify_staff_pin, list_staff_members, get_staff_member_dto, get_staff_setup_status,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

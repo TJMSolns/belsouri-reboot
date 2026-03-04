@@ -166,19 +166,19 @@ Phase 2 ceremonies (Three Amigos, Example Mapping, Acceptance Criteria Review, B
 
 ### Phase 2: Domain Vertical Slices
 
-**Practice Setup** -- Backend COMPLETE (65/65 tests passing. All 11 projection tables live.)
+**Practice Setup** -- COMPLETE (65/65 tests passing, 0 TS errors)
 
-- [x] Events, commands, projections (Rust backend) -- events/practice_setup.rs, projections/practice_setup.rs, practice_setup/service.rs
-- [x] Tauri commands: 28 commands implemented in practice_setup/commands.rs (offices, providers, procedure types, chairs, specializations, practice info, and more)
-- [ ] Frontend: offices page, providers page, procedure types page
-- [ ] End-to-end smoke test verified
+- [x] Events, commands, projections (Rust backend)
+- [x] 28 Tauri commands: offices, providers, procedure types, practice info
+- [x] Frontend: /setup page with 4 tabs (Practice, Offices, Providers, Procedure Types)
+- [x] End-to-end smoke test verified (11 projection tables live)
 
-**Patient Management**
+**Patient Management** -- COMPLETE (84/84 tests passing, 0 TS errors)
 
-- [ ] Events, commands, projections
-- [ ] Tauri commands: register_patient, update_patient_demographics, search_patients, get_patient
-- [ ] Frontend: patient registration form, patient search, patient detail
-- [ ] End-to-end smoke test verified
+- [x] Events, commands, projections
+- [x] 8 Tauri commands: register_patient (soft dupe warning), update demographics/contact, add_note, archive/unarchive, search, get
+- [x] Frontend: /patients page — live search, register form, expandable cards with demographics/contact/notes/archive
+- [x] End-to-end smoke test verified
 
 **Staff Management**
 

@@ -8,5 +8,6 @@ pub use projection_store::{
     PracticeSettingsRow, OfficeRow, OfficeHoursRow,
     ProviderRow, ProviderAvailabilityRow, ProviderExceptionRow,
     ProcedureTypeRow,
+    StaffMemberRow, StaffRoleRow,
     PatientRow, PatientNoteRow,
 };
