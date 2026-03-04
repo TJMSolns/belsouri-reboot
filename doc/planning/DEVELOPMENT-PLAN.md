@@ -48,17 +48,17 @@ Clinical records, billing, insurance, and Jamaica EHR integration are post-MVP.
 
 **Runs as two parallel tracks.**
 
-#### Track A: Infrastructure Vertical Slice
+#### Track A: Infrastructure Vertical Slice (COMPLETE)
 
 Prove the entire toolchain works end-to-end with one command flowing through all layers.
 
-- [ ] Tauri project scaffolding with tauri-specta
-- [ ] Svelte frontend skeleton
-- [ ] SQLite event store (WAL mode, append-only events)
-- [ ] SQLite projection store (WAL mode, incremental projection)
-- [ ] One end-to-end command: UI -> Tauri invoke -> Rust command -> event store -> projection -> query -> UI display
-- [ ] License enforcement: license check on startup, 30-day offline grace period, license key validation
-- [ ] CI: backend tests (`cargo test`), frontend checks (`pnpm check`, `pnpm lint`), clippy
+- [x] Tauri project scaffolding with tauri-specta
+- [x] Svelte frontend skeleton
+- [x] SQLite event store (WAL mode, append-only events)
+- [x] SQLite projection store (WAL mode, incremental projection)
+- [x] One end-to-end command: UI -> Tauri invoke -> Rust command -> event store -> projection -> query -> UI display
+- [x] License enforcement: license check on startup, 30-day offline grace period, license key validation
+- [x] CI: backend tests (`cargo test`), frontend checks (`pnpm check`, `pnpm lint`), clippy
 
 #### Track B: Domain Discovery (ALL COMPLETE)
 
@@ -163,6 +163,43 @@ Phase 2 ceremonies (Three Amigos, Example Mapping, Acceptance Criteria Review, B
 - [x] 2.3 Acceptance Criteria Review
 - [x] 2.4 BDD Scenarios (`features/patient-scheduling.feature`)
 - [x] 2.5 Governance Review
+
+### Phase 2: Domain Vertical Slices
+
+**Practice Setup**
+
+- [ ] Events, commands, projections (Rust backend)
+- [ ] Tauri commands: create_office, list_offices, create_provider, list_providers, create_procedure_type, list_procedure_types
+- [ ] Frontend: offices page, providers page, procedure types page
+- [ ] End-to-end smoke test verified
+
+**Patient Management**
+
+- [ ] Events, commands, projections
+- [ ] Tauri commands: register_patient, update_patient_demographics, search_patients, get_patient
+- [ ] Frontend: patient registration form, patient search, patient detail
+- [ ] End-to-end smoke test verified
+
+**Staff Management**
+
+- [ ] Events, commands, projections
+- [ ] Tauri commands: create_staff_member, set_pin, change_pin, reset_pin, authenticate_staff
+- [ ] Frontend: staff list, staff creation, PIN setup/change
+- [ ] End-to-end smoke test verified
+
+**Staff Scheduling**
+
+- [ ] Events, commands, projections (projection-first model)
+- [ ] Tauri commands: set_availability_pattern, add_exception, get_provider_schedule
+- [ ] Frontend: provider schedule view
+- [ ] End-to-end smoke test verified
+
+**Patient Scheduling (Appointments)**
+
+- [ ] Events, commands, projections (5 hard-stop constraints)
+- [ ] Tauri commands: book_appointment, reschedule_appointment, cancel_appointment, get_schedule
+- [ ] Frontend: appointment booking, daily schedule view
+- [ ] End-to-end smoke test verified
 
 ### Post-MVP
 
