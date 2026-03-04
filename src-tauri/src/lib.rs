@@ -5,6 +5,7 @@ pub mod licensing;
 pub mod practice_setup;
 pub mod patient_management;
 pub mod staff_management;
+pub mod appointments;
 pub mod projections;
 
 use std::sync::Mutex;
@@ -32,6 +33,11 @@ use staff_management::commands::{
     claim_practice_manager_role, register_staff_member, assign_role, remove_role,
     set_pin, change_pin, reset_pin, archive_staff_member, unarchive_staff_member,
     verify_staff_pin, list_staff_members, get_staff_member_dto, get_staff_setup_status,
+};
+use appointments::commands::{
+    book_appointment, reschedule_appointment, cancel_appointment, complete_appointment,
+    mark_appointment_no_show, add_appointment_note, get_schedule, get_appointment,
+    get_tomorrows_call_list,
 };
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -63,6 +69,9 @@ pub fn run() {
                 claim_practice_manager_role, register_staff_member, assign_role, remove_role,
                 set_pin, change_pin, reset_pin, archive_staff_member, unarchive_staff_member,
                 verify_staff_pin, list_staff_members, get_staff_member_dto, get_staff_setup_status,
+                book_appointment, reschedule_appointment, cancel_appointment, complete_appointment,
+                mark_appointment_no_show, add_appointment_note, get_schedule, get_appointment,
+                get_tomorrows_call_list,
             ])
             .export(
                 Typescript::default().bigint(BigIntExportBehavior::Number),
@@ -115,6 +124,9 @@ pub fn run() {
             claim_practice_manager_role, register_staff_member, assign_role, remove_role,
             set_pin, change_pin, reset_pin, archive_staff_member, unarchive_staff_member,
             verify_staff_pin, list_staff_members, get_staff_member_dto, get_staff_setup_status,
+            book_appointment, reschedule_appointment, cancel_appointment, complete_appointment,
+            mark_appointment_no_show, add_appointment_note, get_schedule, get_appointment,
+            get_tomorrows_call_list,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

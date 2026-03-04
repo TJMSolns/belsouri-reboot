@@ -115,6 +115,43 @@ pub struct StaffRoleRow {
     pub role: String,
 }
 
+// ── Appointment row types ─────────────────────────────────────────────────────
+
+#[derive(Debug, Clone)]
+pub struct AppointmentRow {
+    pub appointment_id: String,
+    pub office_id: String,
+    pub patient_id: String,
+    pub patient_name: String,
+    pub patient_phone: Option<String>,
+    pub patient_email: Option<String>,
+    pub preferred_contact_channel: Option<String>,
+    pub procedure_type_id: String,
+    pub procedure_name: String,
+    pub procedure_category: String,
+    pub provider_id: String,
+    pub provider_name: String,
+    /// Local datetime "YYYY-MM-DDTHH:MM:SS"
+    pub start_time: String,
+    /// Local datetime "YYYY-MM-DDTHH:MM:SS"
+    pub end_time: String,
+    pub duration_minutes: u32,
+    /// Booked | Completed | Cancelled | NoShow | Rescheduled
+    pub status: String,
+    pub rescheduled_to_id: Option<String>,
+    pub rescheduled_from_id: Option<String>,
+    pub booked_by: String,
+}
+
+#[derive(Debug, Clone)]
+pub struct AppointmentNoteRow {
+    pub note_id: String,
+    pub appointment_id: String,
+    pub text: String,
+    pub recorded_by: String,
+    pub recorded_at: String,
+}
+
 // ── Patient Management row types ──────────────────────────────────────────────
 
 #[derive(Debug, Clone)]
@@ -295,6 +332,40 @@ impl ProjectionStore {
             );
             CREATE INDEX IF NOT EXISTS idx_patient_notes_patient_id
                 ON patient_notes(patient_id);
+            CREATE TABLE IF NOT EXISTS appointment_list (
+                appointment_id TEXT PRIMARY KEY,
+                office_id TEXT NOT NULL,
+                patient_id TEXT NOT NULL,
+                patient_name TEXT NOT NULL,
+                patient_phone TEXT,
+                patient_email TEXT,
+                preferred_contact_channel TEXT,
+                procedure_type_id TEXT NOT NULL,
+                procedure_name TEXT NOT NULL,
+                procedure_category TEXT NOT NULL,
+                provider_id TEXT NOT NULL,
+                provider_name TEXT NOT NULL,
+                start_time TEXT NOT NULL,
+                end_time TEXT NOT NULL,
+                duration_minutes INTEGER NOT NULL,
+                status TEXT NOT NULL DEFAULT 'Booked',
+                rescheduled_to_id TEXT,
+                rescheduled_from_id TEXT,
+                booked_by TEXT NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_appointment_list_office_start
+                ON appointment_list(office_id, start_time);
+            CREATE INDEX IF NOT EXISTS idx_appointment_list_patient
+                ON appointment_list(patient_id);
+            CREATE TABLE IF NOT EXISTS appointment_notes (
+                note_id TEXT PRIMARY KEY,
+                appointment_id TEXT NOT NULL,
+                text TEXT NOT NULL,
+                recorded_by TEXT NOT NULL,
+                recorded_at TEXT NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_appointment_notes_appt
+                ON appointment_notes(appointment_id);
         ")?;
         Ok(())
     }
@@ -1068,6 +1139,203 @@ impl ProjectionStore {
             recorded_by: row.get(3)?,
             recorded_at: row.get(4)?,
         }))?.collect::<SqlResult<Vec<_>>>()?;
+        Ok(rows)
+    }
+
+    // ── Appointment rows ──────────────────────────────────────────────────────
+
+    pub fn insert_appointment(&self, row: &AppointmentRow) -> Result<()> {
+        self.conn.execute(
+            "INSERT OR IGNORE INTO appointment_list (
+                 appointment_id, office_id, patient_id, patient_name, patient_phone,
+                 patient_email, preferred_contact_channel,
+                 procedure_type_id, procedure_name, procedure_category,
+                 provider_id, provider_name,
+                 start_time, end_time, duration_minutes,
+                 status, rescheduled_to_id, rescheduled_from_id, booked_by)
+             VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17,?18,?19)",
+            params![
+                row.appointment_id, row.office_id, row.patient_id, row.patient_name,
+                row.patient_phone, row.patient_email, row.preferred_contact_channel,
+                row.procedure_type_id, row.procedure_name, row.procedure_category,
+                row.provider_id, row.provider_name,
+                row.start_time, row.end_time, row.duration_minutes,
+                row.status, row.rescheduled_to_id, row.rescheduled_from_id, row.booked_by
+            ],
+        )?;
+        Ok(())
+    }
+
+    pub fn update_appointment_status(
+        &self,
+        appointment_id: &str,
+        status: &str,
+        rescheduled_to_id: Option<&str>,
+    ) -> Result<()> {
+        self.conn.execute(
+            "UPDATE appointment_list SET status = ?2, rescheduled_to_id = COALESCE(?3, rescheduled_to_id)
+             WHERE appointment_id = ?1",
+            params![appointment_id, status, rescheduled_to_id],
+        )?;
+        Ok(())
+    }
+
+    pub fn get_appointment(&self, appointment_id: &str) -> Result<Option<AppointmentRow>> {
+        let r: SqlResult<AppointmentRow> = self.conn.query_row(
+            "SELECT appointment_id, office_id, patient_id, patient_name, patient_phone,
+                    patient_email, preferred_contact_channel,
+                    procedure_type_id, procedure_name, procedure_category,
+                    provider_id, provider_name,
+                    start_time, end_time, duration_minutes,
+                    status, rescheduled_to_id, rescheduled_from_id, booked_by
+             FROM appointment_list WHERE appointment_id = ?1",
+            params![appointment_id],
+            |row| Ok(AppointmentRow {
+                appointment_id: row.get(0)?,
+                office_id: row.get(1)?,
+                patient_id: row.get(2)?,
+                patient_name: row.get(3)?,
+                patient_phone: row.get(4)?,
+                patient_email: row.get(5)?,
+                preferred_contact_channel: row.get(6)?,
+                procedure_type_id: row.get(7)?,
+                procedure_name: row.get(8)?,
+                procedure_category: row.get(9)?,
+                provider_id: row.get(10)?,
+                provider_name: row.get(11)?,
+                start_time: row.get(12)?,
+                end_time: row.get(13)?,
+                duration_minutes: row.get::<_, i64>(14)? as u32,
+                status: row.get(15)?,
+                rescheduled_to_id: row.get(16)?,
+                rescheduled_from_id: row.get(17)?,
+                booked_by: row.get(18)?,
+            }),
+        );
+        match r {
+            Ok(v) => Ok(Some(v)),
+            Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+            Err(e) => Err(e.into()),
+        }
+    }
+
+    fn map_appointment_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<AppointmentRow> {
+        Ok(AppointmentRow {
+            appointment_id: row.get(0)?,
+            office_id: row.get(1)?,
+            patient_id: row.get(2)?,
+            patient_name: row.get(3)?,
+            patient_phone: row.get(4)?,
+            patient_email: row.get(5)?,
+            preferred_contact_channel: row.get(6)?,
+            procedure_type_id: row.get(7)?,
+            procedure_name: row.get(8)?,
+            procedure_category: row.get(9)?,
+            provider_id: row.get(10)?,
+            provider_name: row.get(11)?,
+            start_time: row.get(12)?,
+            end_time: row.get(13)?,
+            duration_minutes: row.get::<_, i64>(14)? as u32,
+            status: row.get(15)?,
+            rescheduled_to_id: row.get(16)?,
+            rescheduled_from_id: row.get(17)?,
+            booked_by: row.get(18)?,
+        })
+    }
+
+    /// Returns all appointments for an office on a given date (YYYY-MM-DD), all statuses.
+    pub fn list_appointments_for_office_on_date(
+        &self,
+        office_id: &str,
+        date: &str,
+    ) -> Result<Vec<AppointmentRow>> {
+        let start = format!("{}T00:00:00", date);
+        let end   = format!("{}T23:59:59", date);
+        let mut stmt = self.conn.prepare(
+            "SELECT appointment_id, office_id, patient_id, patient_name, patient_phone,
+                    patient_email, preferred_contact_channel,
+                    procedure_type_id, procedure_name, procedure_category,
+                    provider_id, provider_name,
+                    start_time, end_time, duration_minutes,
+                    status, rescheduled_to_id, rescheduled_from_id, booked_by
+             FROM appointment_list
+             WHERE office_id = ?1 AND start_time >= ?2 AND start_time <= ?3
+             ORDER BY start_time ASC",
+        )?;
+        let rows = stmt.query_map(params![office_id, start, end], Self::map_appointment_row)?
+            .collect::<SqlResult<Vec<_>>>()?;
+        Ok(rows)
+    }
+
+    /// Count of Booked appointments at an office whose time window overlaps [start_time, end_time).
+    /// Overlap = existing.start < proposed.end AND existing.end > proposed.start.
+    /// Optionally exclude a specific appointment_id (used when rescheduling from same office).
+    pub fn count_overlapping_booked(
+        &self,
+        office_id: &str,
+        start_time: &str,
+        end_time: &str,
+        exclude_id: Option<&str>,
+    ) -> Result<i64> {
+        let count: i64 = self.conn.query_row(
+            "SELECT COUNT(*) FROM appointment_list
+             WHERE office_id = ?1
+               AND status = 'Booked'
+               AND start_time < ?3
+               AND end_time > ?2
+               AND (?4 IS NULL OR appointment_id != ?4)",
+            params![office_id, start_time, end_time, exclude_id],
+            |row| row.get(0),
+        )?;
+        Ok(count)
+    }
+
+    pub fn add_appointment_note(&self, row: &AppointmentNoteRow) -> Result<()> {
+        self.conn.execute(
+            "INSERT OR IGNORE INTO appointment_notes (note_id, appointment_id, text, recorded_by, recorded_at)
+             VALUES (?1, ?2, ?3, ?4, ?5)",
+            params![row.note_id, row.appointment_id, row.text, row.recorded_by, row.recorded_at],
+        )?;
+        Ok(())
+    }
+
+    pub fn list_appointment_notes(&self, appointment_id: &str) -> Result<Vec<AppointmentNoteRow>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT note_id, appointment_id, text, recorded_by, recorded_at
+             FROM appointment_notes WHERE appointment_id = ?1
+             ORDER BY recorded_at ASC",
+        )?;
+        let rows = stmt.query_map(params![appointment_id], |row| Ok(AppointmentNoteRow {
+            note_id: row.get(0)?,
+            appointment_id: row.get(1)?,
+            text: row.get(2)?,
+            recorded_by: row.get(3)?,
+            recorded_at: row.get(4)?,
+        }))?.collect::<SqlResult<Vec<_>>>()?;
+        Ok(rows)
+    }
+
+    /// Returns Booked appointments at an office for a specific date (YYYY-MM-DD), ordered by start_time.
+    pub fn get_call_list(
+        &self,
+        office_id: &str,
+        date: &str,
+    ) -> Result<Vec<AppointmentRow>> {
+        let start = format!("{}T00:00:00", date);
+        let end   = format!("{}T23:59:59", date);
+        let mut stmt = self.conn.prepare(
+            "SELECT appointment_id, office_id, patient_id, patient_name, patient_phone,
+                    patient_email, preferred_contact_channel,
+                    procedure_type_id, procedure_name, procedure_category,
+                    provider_id, provider_name,
+                    start_time, end_time, duration_minutes,
+                    status, rescheduled_to_id, rescheduled_from_id, booked_by
+             FROM appointment_list
+             WHERE office_id = ?1 AND start_time >= ?2 AND start_time <= ?3 AND status = 'Booked'
+             ORDER BY start_time ASC",
+        )?;
+        let rows = stmt.query_map(params![office_id, start, end], Self::map_appointment_row)?
+            .collect::<SqlResult<Vec<_>>>()?;
         Ok(rows)
     }
 

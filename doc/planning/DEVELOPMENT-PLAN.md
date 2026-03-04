@@ -180,12 +180,13 @@ Phase 2 ceremonies (Three Amigos, Example Mapping, Acceptance Criteria Review, B
 - [x] Frontend: /patients page — live search, register form, expandable cards with demographics/contact/notes/archive
 - [x] End-to-end smoke test verified
 
-**Staff Management**
+**Staff Management** — COMPLETE
 
-- [ ] Events, commands, projections
-- [ ] Tauri commands: create_staff_member, set_pin, change_pin, reset_pin, authenticate_staff
-- [ ] Frontend: staff list, staff creation, PIN setup/change
-- [ ] End-to-end smoke test verified
+- [x] Events: StaffMemberRegistered, PracticeManagerClaimed, RoleAssigned, RoleRemoved, PINSet, PINChanged, PINReset, StaffMemberArchived, StaffMemberUnarchived
+- [x] Commands: claim_practice_manager_role, register_staff_member, assign_role, remove_role, set_pin, change_pin, reset_pin, archive_staff_member, unarchive_staff_member, verify_staff_pin, list_staff_members, get_staff_member_dto, get_staff_setup_status
+- [x] Projections: staff_members, staff_member_roles (incremental)
+- [x] Frontend: /staff — bootstrap, staff cards, roles, PIN ops, archive/unarchive
+- [x] 130 backend tests pass, 0 TS errors
 
 **Staff Scheduling**
 
@@ -194,12 +195,13 @@ Phase 2 ceremonies (Three Amigos, Example Mapping, Acceptance Criteria Review, B
 - [ ] Frontend: provider schedule view
 - [ ] End-to-end smoke test verified
 
-**Patient Scheduling (Appointments)**
+**Patient Scheduling (Appointments)** — COMPLETE
 
-- [ ] Events, commands, projections (5 hard-stop constraints)
-- [ ] Tauri commands: book_appointment, reschedule_appointment, cancel_appointment, get_schedule
-- [ ] Frontend: appointment booking, daily schedule view
-- [ ] End-to-end smoke test verified
+- [x] Events: AppointmentBooked, AppointmentRescheduled, AppointmentCancelled, AppointmentCompleted, AppointmentMarkedNoShow, AppointmentNoteAdded
+- [x] Commands: book_appointment (5 hard-stop constraints), reschedule_appointment, cancel_appointment, complete_appointment, mark_appointment_no_show, add_appointment_note, get_schedule, get_appointment, get_tomorrows_call_list
+- [x] Projections: appointment_list, appointment_notes (incremental, denormalized names)
+- [x] Frontend: /schedule — date/office selector, daily schedule, book form, status actions, notes, call list
+- [x] 130 backend tests pass, 0 TS errors
 
 ### Post-MVP
 

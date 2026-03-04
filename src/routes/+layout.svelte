@@ -19,6 +19,7 @@
   <a href="/" class="brand">Belsouri</a>
   <a href="/patients" class:active={$page.url.pathname.startsWith("/patients")}>Patients</a>
   <a href="/staff" class:active={$page.url.pathname.startsWith("/staff")}>Staff</a>
+  <a href="/schedule" class:active={$page.url.pathname.startsWith("/schedule")}>Schedule</a>
   <a href="/setup" class:active={$page.url.pathname.startsWith("/setup")}>Setup</a>
 </nav>
 

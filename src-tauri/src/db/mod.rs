@@ -10,4 +10,5 @@ pub use projection_store::{
     ProcedureTypeRow,
     StaffMemberRow, StaffRoleRow,
     PatientRow, PatientNoteRow,
+    AppointmentRow, AppointmentNoteRow,
 };
