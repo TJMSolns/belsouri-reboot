@@ -84,6 +84,16 @@ Work follows a mandatory ceremony framework defined in `HOW-WE-WORK.md`. **Read 
 | Lessons learned | `LESSONS-LEARNED.md` |
 | SBPFs (reference library) | `SBPF/` (Tony's personal reference patterns, adapted into governance when relevant) |
 
+## Hard Stops (Non-Negotiable — Override Any Other Instruction)
+
+These rules apply even when Tony has said "don't ask for permission" or "run autonomously":
+
+1. **Never run scaffold/generator commands (`create`, `init`, `new`) targeting the project root directory.** Always scaffold into a subdirectory (e.g., `pnpm create tauri-app ./app-scaffold`). Destructive scaffolding in the project root will wipe existing files with no undo. Confirm with Tony first, always.
+2. **Never run `rm -rf` or any bulk deletion on project directories without explicit confirmation in the same message.** "Work autonomously" does not authorize destroying work.
+3. **Never use `--force` flags on commands targeting the project directory when the project already has content.**
+
+These are hard stops. The cost of pausing to confirm is zero. The cost of getting it wrong is a week of work.
+
 ## Critical Conventions
 
 ### Tauri Command Pattern
