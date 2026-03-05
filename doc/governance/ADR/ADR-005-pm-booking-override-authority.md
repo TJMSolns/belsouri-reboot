@@ -84,6 +84,19 @@ No override option is shown for hard stops.
 
 ---
 
+## Decisions (Phase 2 Ceremony — Confirmed 2026-03-05)
+
+All four open questions from the initial ADR draft have been resolved:
+
+| Question | Decision |
+|---|---|
+| How does book_appointment identify PM actor? | Pass `actor_role: String` as a command parameter. UI provides this from session state. |
+| Override audit: separate event or payload field? | Add `override_reason: Option<String>` to `AppointmentBooked` payload. Non-override bookings have null. |
+| Visual flag on overridden appointments? | Detail panel only — "PM override · [reason]" note. Not shown on grid cell. |
+| Can C1 + C2 both be overridden in one booking? | Yes — single reason field covers both soft stops. |
+
+---
+
 ## Implementation Notes
 
 This decision modifies the `book_appointment` command (an existing booking invariant). Ceremony is required before implementation:

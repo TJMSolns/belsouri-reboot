@@ -632,3 +632,120 @@ Feature: Patient Scheduling — Appointment Booking and Lifecycle
       Given no appointments at "Main Office" on 2026-03-09 between 10:00 and 10:30
       When the front desk books an appointment for "Maria Brown" with "Sarah Williams" for "Consultation" at "Main Office" on 2026-03-09 at 10:00
       Then an AppointmentBooked event is recorded
+
+  # ─────────────────────────────────────────────────────────────
+  # SCH-4b: PM Booking Override
+  # Decisions: actor_role param, override_reason on AppointmentBooked,
+  #            detail panel flag, C1+C2 overridable in single booking
+  # All four open questions CONFIRMED by Tony (2026-03-05)
+  # Soft stops (PM override allowed): C1, C2
+  # Hard stops (no override for anyone): C3, C4, C5, C6, C7
+  # ─────────────────────────────────────────────────────────────
+
+  Rule: A Practice Manager may override soft constraints (C1, C2) with an explicit reason; hard stops (C3–C7) are never overridable
+
+    Background:
+      And provider "Dr. Lloyd Dentist" is a Dentist registered at "Kingston Dental"
+      And procedure "Cleaning" has default duration 60 minutes, requires Hygienist, and is active
+      And procedure "Root Canal" has default duration 90 minutes, requires Specialist, and is active
+      And provider "Sasha Hygienist" is a Hygienist available at "Kingston Dental" Monday–Friday 09:00–16:00
+
+    Scenario: PM overrides closed-office constraint (C1) with reason
+      Given office "Kingston Dental" is closed on Sundays
+      And a patient "Devon Patient" is registered
+      And provider "Dr. Lloyd Dentist" is available at "Kingston Dental"
+      And procedure "Cleaning" requires no specific provider type
+      And actor role is "PracticeManager"
+      When a Practice Manager books "Devon Patient" for "Cleaning" with "Dr. Lloyd Dentist"
+        at "Kingston Dental" on a Sunday at 10:00 AM
+        with override_reason "Emergency coverage arranged"
+      Then the appointment is booked successfully
+      And the AppointmentBooked event contains override_reason "Emergency coverage arranged"
+
+    Scenario: PM overrides unscheduled-provider constraint (C2) with reason
+      Given office "Kingston Dental" is open on Monday
+      And provider "Dr. Lloyd Dentist" has no availability set for Monday at "Kingston Dental"
+      And a patient "Asha Patient" is registered
+      And procedure "Filling" requires "Dentist" or higher
+      And actor role is "PracticeManager"
+      When a Practice Manager books "Asha Patient" for "Filling" with "Dr. Lloyd Dentist"
+        at "Kingston Dental" on Monday at 14:00
+        with override_reason "Provider available by arrangement"
+      Then the appointment is booked successfully
+      And the AppointmentBooked event contains override_reason "Provider available by arrangement"
+
+    Scenario: Staff cannot override closed-office constraint (C1)
+      Given office "Kingston Dental" is closed on Sundays
+      And a patient "Marcus Patient" is registered
+      And actor role is "Staff"
+      When a Staff member attempts to book "Marcus Patient" at "Kingston Dental" on a Sunday
+      Then the booking is rejected
+      And the error message contains "Kingston Dental is not open on Sunday"
+      And the error message does not offer an override option
+
+    Scenario: PM cannot override no-chairs constraint (C3)
+      Given all 3 chairs at "Kingston Dental" are booked at 10:00 AM on Monday
+      And a patient "Carlton Patient" is registered
+      And actor role is "PracticeManager"
+      When a Practice Manager attempts to book "Carlton Patient" at "Kingston Dental" at 10:00 AM on Monday
+        with override_reason "Should fit somehow"
+      Then the booking is rejected
+      And the error message contains "No chairs available at Kingston Dental at 10:00 AM"
+
+    Scenario: PM cannot override provider capability constraint (C7)
+      Given procedure "Root Canal" requires "Specialist"
+      And provider "Sasha Hygienist" is scheduled at "Kingston Dental" on Monday
+      And a patient "Errol Patient" is registered
+      And actor role is "PracticeManager"
+      When a Practice Manager attempts to book "Errol Patient" for "Root Canal" with "Sasha Hygienist"
+        with override_reason "Only provider available"
+      Then the booking is rejected
+      And the error message contains "Root Canal requires a Specialist or higher"
+
+    Scenario: Override reason is required
+      Given office "Kingston Dental" is closed on Sunday
+      And a patient "Nadine Patient" is registered
+      And actor role is "PracticeManager"
+      When a Practice Manager attempts to book with an empty override_reason
+      Then the booking is rejected
+      And the error message contains "Override reason is required"
+
+    Scenario: PM overrides both C1 and C2 in a single booking with one reason
+      Given office "Kingston Dental" is closed on Sunday
+      And provider "Dr. Lloyd Dentist" has no Sunday availability at "Kingston Dental"
+      And a patient "Devon Patient" is registered
+      And actor role is "PracticeManager"
+      When a Practice Manager books "Devon Patient" for "Cleaning" with "Dr. Lloyd Dentist"
+        at "Kingston Dental" on a Sunday at 10:00 AM
+        with override_reason "Emergency call-in coverage arranged"
+      Then the appointment is booked successfully
+      And the AppointmentBooked event contains override_reason "Emergency call-in coverage arranged"
+
+    Scenario: Normal booking has null override_reason in the event payload
+      Given office "Kingston Dental" is open on Monday
+      And provider "Dr. Lloyd Dentist" is available at "Kingston Dental" on Monday
+      And a patient "Maria Brown" is registered
+      And no appointments at "Kingston Dental" on Monday between 10:00 and 11:00
+      When the front desk books "Maria Brown" for "Cleaning" with "Dr. Lloyd Dentist"
+        at "Kingston Dental" on Monday at 10:00
+      Then an AppointmentBooked event is recorded
+      And the AppointmentBooked event has override_reason null
+
+    Scenario: PM reschedules to a closed-office day with a reason — succeeds
+      Given an existing Booked appointment for "Devon Patient" at "Kingston Dental"
+      And office "Kingston Dental" is closed on Sunday
+      And actor role is "PracticeManager"
+      When a Practice Manager reschedules the appointment to "Kingston Dental" on a Sunday at 10:00
+        with override_reason "Patient-requested Sunday coverage"
+      Then an AppointmentRescheduled event is recorded on the original appointment
+      And an AppointmentBooked event is recorded for the new appointment
+      And the new AppointmentBooked event contains override_reason "Patient-requested Sunday coverage"
+
+    Scenario: Staff cannot reschedule to a closed-office day
+      Given an existing Booked appointment for "Marcus Patient" at "Kingston Dental"
+      And office "Kingston Dental" is closed on Sunday
+      And actor role is "Staff"
+      When a Staff member attempts to reschedule the appointment to "Kingston Dental" on a Sunday at 10:00
+      Then no AppointmentRescheduled event is recorded
+      And the original appointment status remains Booked
+      And the error message contains "Kingston Dental is not open on Sunday"
