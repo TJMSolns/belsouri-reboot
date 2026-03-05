@@ -233,7 +233,13 @@
   {/if}
 
   {#if providers.length === 0 && !showRegister}
-    <p class="empty">No providers yet.</p>
+    <div class="empty-state-block">
+      <p class="empty">No providers registered yet.</p>
+      <div class="providers-tip">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" width="14" height="14"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+        <span>Staff members with the <strong>Provider</strong> role must also be registered here before they can be scheduled for appointments.</span>
+      </div>
+    </div>
   {/if}
 
   <div class="provider-list">
@@ -387,6 +393,22 @@
   h4 { margin: var(--space-4) 0 var(--space-2); font-size: var(--text-xs); font-weight: 700; color: var(--slate-fog); text-transform: uppercase; letter-spacing: 0.04em; font-family: var(--font-body); }
   .error { color: var(--healthy-coral-dk); font-size: var(--text-sm); margin-bottom: var(--space-2); }
   .empty, .muted { color: var(--slate-fog); font-size: var(--text-sm); font-style: italic; }
+  .empty-state-block { display: flex; flex-direction: column; gap: var(--space-3); }
+  .providers-tip {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--space-2);
+    padding: var(--space-3);
+    background: #e6f7f8;
+    border: 1px solid var(--caribbean-teal);
+    border-radius: var(--radius-sm);
+    font-size: var(--text-xs);
+    color: var(--abyss-navy);
+    font-family: var(--font-body);
+    line-height: 1.5;
+  }
+  .providers-tip svg { flex-shrink: 0; color: var(--caribbean-teal); margin-top: 1px; }
+  .providers-tip strong { font-weight: 700; }
 
   .create-form {
     background: var(--pearl-mist); border: 1px solid var(--pearl-mist-dk);

@@ -33,6 +33,25 @@
   let detailLoading = $state(false);
   let showCancelConfirm = $state(false);
   let cancelReason = $state("");
+  let completingAppt = $state(false);
+  let noShowingAppt = $state(false);
+  let cancellingAppt = $state(false);
+
+  // ── Reschedule form (in detail drawer) ────────────────────────────────────
+
+  let showReschedule = $state(false);
+  let reschedOfficeId = $state("");
+  let reschedProviderId = $state("");
+  let reschedDate = $state("");
+  let reschedTime = $state("");
+  let reschedLoading = $state(false);
+  let reschedError = $state("");
+  let reschedRoster = $state<ProviderScheduleEntry[]>([]);
+  let reschedRosterLoading = $state(false);
+
+  // ── Provider grid visibility (SCH-2) ──────────────────────────────────────
+
+  let showAllProviders = $state(false);
 
   // ── Book drawer ───────────────────────────────────────────────────────────
 
@@ -101,6 +120,20 @@
   );
 
   let isToday = $derived(selectedDate === todayLocal());
+
+  let reschedAvailableSlots = $derived(
+    (() => {
+      const entry = reschedRoster.find((e) => e.provider_id === reschedProviderId);
+      if (!entry) return [];
+      return generateTimeSlots(entry.start_time, entry.end_time);
+    })(),
+  );
+
+  let visibleProviders = $derived(
+    showAllProviders
+      ? officeProviders
+      : officeProviders.filter((p) => providerRoster.some((r) => r.provider_id === p.id)),
+  );
 
   // ── Helpers ───────────────────────────────────────────────────────────────
 
@@ -268,6 +301,9 @@
     cancelReason = "";
     noteText = "";
     noteError = "";
+    showReschedule = false;
+    reschedError = "";
+    reschedRoster = [];
   }
 
   // ── Book drawer ───────────────────────────────────────────────────────────
@@ -367,7 +403,9 @@
     if (!ok) return;
     const patientName = detailData?.appointment.patient_name ?? "Appointment";
     const apptTime = detailData ? ` at ${formatTime(detailData.appointment.start_time)}` : "";
+    completingAppt = true;
     const res = await commands.completeAppointment(apptId, STAFF_ID);
+    completingAppt = false;
     if (res.status === "ok") {
       toast.success(`${patientName}${apptTime} marked complete.`);
       closeDetail();
@@ -387,7 +425,9 @@
     if (!ok) return;
     const patientName = detailData?.appointment.patient_name ?? "Appointment";
     const apptTime = detailData ? ` at ${formatTime(detailData.appointment.start_time)}` : "";
+    noShowingAppt = true;
     const res = await commands.markAppointmentNoShow(apptId, STAFF_ID);
+    noShowingAppt = false;
     if (res.status === "ok") {
       toast.success(`${patientName}${apptTime} marked no-show.`);
       closeDetail();
@@ -400,7 +440,9 @@
   async function doCancel(apptId: string) {
     const patientName = detailData?.appointment.patient_name ?? "Appointment";
     const apptTime = detailData ? ` at ${formatTime(detailData.appointment.start_time)}` : "";
+    cancellingAppt = true;
     const res = await commands.cancelAppointment(apptId, STAFF_ID, cancelReason.trim() || null);
+    cancellingAppt = false;
     if (res.status === "ok") {
       toast.success(`${patientName}${apptTime} cancelled.`);
       closeDetail();
@@ -426,6 +468,57 @@
     }
   }
 
+  // ── Reschedule ────────────────────────────────────────────────────────────
+
+  function openReschedule() {
+    if (!detailData) return;
+    const appt = detailData.appointment;
+    showReschedule = true;
+    showCancelConfirm = false;
+    reschedOfficeId = appt.office_id;
+    reschedProviderId = appt.provider_id;
+    reschedDate = appt.start_time.slice(0, 10);
+    reschedTime = appt.start_time.slice(11, 16);
+    reschedError = "";
+    reschedRoster = [];
+  }
+
+  function closeReschedule() {
+    showReschedule = false;
+    reschedError = "";
+    reschedRoster = [];
+  }
+
+  async function loadReschedRoster() {
+    if (!reschedOfficeId || !reschedDate) return;
+    reschedRosterLoading = true;
+    const res = await commands.getOfficeProviderSchedule(reschedOfficeId, reschedDate);
+    reschedRosterLoading = false;
+    if (res.status === "ok") reschedRoster = res.data;
+  }
+
+  async function doReschedule(apptId: string) {
+    if (!reschedProviderId || !reschedDate || !reschedTime) {
+      reschedError = "Select a new date, provider, and time slot.";
+      return;
+    }
+    reschedLoading = true;
+    reschedError = "";
+    const patientName = detailData?.appointment.patient_name ?? "Appointment";
+    const res = await commands.rescheduleAppointment(
+      apptId, reschedOfficeId, reschedProviderId,
+      buildStartTime(reschedDate, reschedTime), null, STAFF_ID,
+    );
+    reschedLoading = false;
+    if (res.status === "ok") {
+      toast.success(`${patientName} rescheduled to ${formatDisplayDate(reschedDate)} at ${minsTo12h(parseHHMM(reschedTime))}.`);
+      closeDetail();
+      await loadGrid();
+    } else {
+      reschedError = getErrorMessage(res.error);
+    }
+  }
+
   // ── Keyboard shortcuts ────────────────────────────────────────────────────
 
   function onKeydown(e: KeyboardEvent) {
@@ -448,6 +541,10 @@
 
   $effect(() => {
     if (showBookForm && bookOfficeId && bookStartDate) loadBookRoster();
+  });
+
+  $effect(() => {
+    if (showReschedule && reschedOfficeId && reschedDate) loadReschedRoster();
   });
 </script>
 
@@ -638,13 +735,16 @@
         {#if appt.status === "Booked"}
           {#if !showCancelConfirm}
             <div class="detail-actions">
-              <button class="btn btn-primary btn-sm" onclick={() => doComplete(appt.appointment_id)}>
-                Mark complete
+              <button class="btn btn-primary btn-sm" onclick={() => doComplete(appt.appointment_id)} disabled={completingAppt || noShowingAppt || cancellingAppt || reschedLoading}>
+                {#if completingAppt}<span class="spinner" aria-hidden="true"></span><span class="sr-only">Completing</span>{:else}Mark complete{/if}
               </button>
-              <button class="btn btn-ghost btn-sm" onclick={() => doNoShow(appt.appointment_id)}>
-                No-show
+              <button class="btn btn-ghost btn-sm" onclick={() => doNoShow(appt.appointment_id)} disabled={completingAppt || noShowingAppt || cancellingAppt || reschedLoading}>
+                {#if noShowingAppt}<span class="spinner" aria-hidden="true"></span><span class="sr-only">Saving</span>{:else}No-show{/if}
               </button>
-              <button class="btn btn-destructive btn-sm" onclick={() => (showCancelConfirm = true)}>
+              <button class="btn btn-ghost btn-sm" onclick={() => { if (showReschedule) closeReschedule(); else openReschedule(); }} disabled={completingAppt || noShowingAppt || cancellingAppt || reschedLoading}>
+                Reschedule
+              </button>
+              <button class="btn btn-destructive btn-sm" onclick={() => (showCancelConfirm = true)} disabled={completingAppt || noShowingAppt || cancellingAppt || reschedLoading}>
                 Cancel appointment
               </button>
             </div>
@@ -665,6 +765,69 @@
           {/if}
         {/if}
 
+        <!-- Reschedule form -->
+        {#if showReschedule}
+          <div class="reschedule-box">
+            <p class="reschedule-label">Reschedule appointment</p>
+            <div class="book-row" style="margin-bottom: var(--space-3);">
+              <div class="form-field" style="flex:1">
+                <label class="field-label" for="resched-date">New date</label>
+                <input id="resched-date" type="date" bind:value={reschedDate} onchange={() => loadReschedRoster()} />
+              </div>
+              <div class="form-field" style="flex:1">
+                <label class="field-label" for="resched-office">Office</label>
+                <select id="resched-office" bind:value={reschedOfficeId} onchange={() => loadReschedRoster()}>
+                  {#each offices as o}<option value={o.id}>{o.name}</option>{/each}
+                </select>
+              </div>
+            </div>
+            <p class="book-section-label">Provider</p>
+            {#if reschedRosterLoading}
+              <div class="load-row"><div class="spinner spinner-sm"></div> Checking availability…</div>
+            {:else if reschedRoster.length === 0 && reschedDate}
+              <p class="field-hint">No providers scheduled on {formatDisplayDate(reschedDate)} at this office. <a href="/setup">Set availability in Setup → Providers</a>.</p>
+            {:else}
+              <div class="chip-group" style="margin-bottom: var(--space-3);">
+                {#each reschedRoster as entry}
+                  <button
+                    class="chip"
+                    class:chip-selected={reschedProviderId === entry.provider_id}
+                    onclick={() => { reschedProviderId = entry.provider_id; reschedTime = generateTimeSlots(entry.start_time, entry.end_time)[0] ?? ""; }}
+                  >
+                    <span class="chip-name">{entry.provider_name}</span>
+                    <span class="chip-hours">{entry.start_time}–{entry.end_time}</span>
+                  </button>
+                {/each}
+              </div>
+            {/if}
+            {#if reschedProviderId && reschedAvailableSlots.length > 0}
+              <p class="book-section-label">New time</p>
+              <div class="slot-grid" style="margin-bottom: var(--space-3);">
+                {#each reschedAvailableSlots as slot}
+                  <button
+                    class="slot-btn"
+                    class:slot-selected={reschedTime === slot}
+                    onclick={() => (reschedTime = slot)}
+                  >{minsTo12h(parseHHMM(slot))}</button>
+                {/each}
+              </div>
+            {/if}
+            {#if reschedError}
+              <div class="field-error" role="alert" style="margin-bottom: var(--space-2);">{reschedError}</div>
+            {/if}
+            <div class="reschedule-actions">
+              <button class="btn btn-ghost btn-sm" onclick={closeReschedule}>Cancel</button>
+              <button
+                class="btn btn-primary btn-sm"
+                onclick={() => doReschedule(appt.appointment_id)}
+                disabled={reschedLoading || !reschedProviderId || !reschedTime}
+              >
+                {#if reschedLoading}<span class="spinner" aria-hidden="true"></span><span class="sr-only">Rescheduling</span>{:else}Confirm reschedule{/if}
+              </button>
+            </div>
+          </div>
+        {/if}
+
         <!-- Notes -->
         <div class="notes-section">
           <h3 class="notes-heading">Notes {detailData.notes.length > 0 ? `(${detailData.notes.length})` : ""}</h3>
@@ -683,7 +846,7 @@
           {/if}
 
           <div class="add-note-form">
-            <label class="sr-only" for="note-text">Add note</label>
+            <label class="field-label" for="note-text">Add note</label>
             <textarea
               id="note-text"
               placeholder="Add a note…"
@@ -772,8 +935,9 @@
     {#if showCallList}
       <div class="card" style="margin-bottom: var(--space-6);">
         <div class="card-header">
-          <h2 class="card-title">Call list</h2>
+          <h2 class="card-title">Call list<span class="print-only-date">&nbsp;—&nbsp;{formatDisplayDate(callListDate)}</span></h2>
           <input type="date" bind:value={callListDate} onchange={loadCallList} style="min-height:36px;width:auto;" />
+          <button class="btn btn-ghost btn-sm print-btn" onclick={() => window.print()}>Print</button>
         </div>
         {#if callList.length === 0}
           <p class="text-muted text-sm">No booked appointments for this date.</p>
@@ -827,97 +991,119 @@
         <p class="empty-state-message">Assign providers to this office in <a href="/setup">Setup → Providers</a>.</p>
       </div>
     {:else}
-      <div class="grid-outer">
-        <!-- Column headers -->
-        <div class="grid-header">
-          <div class="time-col-head" aria-hidden="true"></div>
-          {#each officeProviders as prov}
-            {@const rosterEntry = providerRoster.find((r) => r.provider_id === prov.id)}
-            <div class="col-head" class:col-head-off={!rosterEntry}>
-              <div class="col-head-name">{prov.name}</div>
-              {#if rosterEntry}
-                <div class="col-head-hours">{rosterEntry.start_time}–{rosterEntry.end_time}</div>
-              {:else}
-                <div class="col-head-off-label">Not scheduled</div>
-              {/if}
-            </div>
-          {/each}
+      <!-- Provider visibility toggle (SCH-2) -->
+      {#if providerRoster.length < officeProviders.length}
+        <div class="provider-toggle-row">
+          <button class="btn btn-ghost btn-sm" onclick={() => (showAllProviders = !showAllProviders)}>
+            {showAllProviders
+              ? "Show scheduled only"
+              : `Show all providers (${officeProviders.length - providerRoster.length} not scheduled today)`}
+          </button>
         </div>
+      {/if}
 
-        <!-- Grid body -->
-        <div class="grid-body">
-          <!-- Time labels -->
-          <div class="time-col" style="height: {gridHeight}px" aria-hidden="true">
-            {#each timeTicks as tick}
-              <div class="time-tick" style="top: {tick.top}px">{tick.label}</div>
+      {#if visibleProviders.length === 0}
+        <div class="empty-state">
+          <span class="empty-state-icon" aria-hidden="true">📅</span>
+          <p class="empty-state-title">No providers scheduled on {dayName}</p>
+          <p class="empty-state-message">
+            <button class="link-btn" onclick={() => (showAllProviders = true)}>Show all providers</button>
+            or set availability in <a href="/setup">Setup → Providers</a>.
+          </p>
+        </div>
+      {:else}
+        <div class="grid-outer">
+          <!-- Column headers -->
+          <div class="grid-header">
+            <div class="time-col-head" aria-hidden="true"></div>
+            {#each visibleProviders as prov}
+              {@const rosterEntry = providerRoster.find((r) => r.provider_id === prov.id)}
+              <div class="col-head" class:col-head-off={!rosterEntry}>
+                <div class="col-head-name">{prov.name}</div>
+                {#if rosterEntry}
+                  <div class="col-head-hours">{rosterEntry.start_time}–{rosterEntry.end_time}</div>
+                {:else}
+                  <div class="col-head-off-label">Not scheduled</div>
+                {/if}
+              </div>
             {/each}
           </div>
 
-          <!-- Provider columns -->
-          {#each officeProviders as prov}
-            {@const rosterEntry = providerRoster.find((r) => r.provider_id === prov.id)}
-            {@const isWorking = !!rosterEntry}
-            {@const provStart = rosterEntry ? parseHHMM(rosterEntry.start_time) : openMins}
-            {@const provEnd   = rosterEntry ? parseHHMM(rosterEntry.end_time)   : openMins}
-            {@const appts = schedule.filter((a) => a.provider_id === prov.id)}
+          <!-- Grid body -->
+          <div class="grid-body">
+            <!-- Time labels -->
+            <div class="time-col" style="height: {gridHeight}px" aria-hidden="true">
+              {#each timeTicks as tick}
+                <div class="time-tick" style="top: {tick.top}px">{tick.label}</div>
+              {/each}
+            </div>
 
-            {#if isWorking}
-              <div
-                class="provider-col"
-                style="height: {gridHeight}px"
-                role="button"
-                tabindex="0"
-                aria-label="Book appointment with {prov.name}"
-                onclick={(e) => onColumnClick(e, prov.id)}
-                onkeydown={(e) => { if (e.key === "Enter") onColumnClick(e as unknown as MouseEvent, prov.id); }}
-              >
-                {#each timeTicks as tick}
-                  <div class="h-line" style="top: {tick.top}px" aria-hidden="true"></div>
-                {/each}
+            <!-- Provider columns -->
+            {#each visibleProviders as prov}
+              {@const rosterEntry = providerRoster.find((r) => r.provider_id === prov.id)}
+              {@const isWorking = !!rosterEntry}
+              {@const provStart = rosterEntry ? parseHHMM(rosterEntry.start_time) : openMins}
+              {@const provEnd   = rosterEntry ? parseHHMM(rosterEntry.end_time)   : openMins}
+              {@const appts = schedule.filter((a) => a.provider_id === prov.id)}
 
-                {#if provStart > openMins}
-                  <div class="unavail" style="top: 0; height: {((provStart - openMins) / 15) * SLOT_HEIGHT}px" aria-hidden="true"></div>
-                {/if}
+              {#if isWorking}
+                <div
+                  class="provider-col"
+                  style="height: {gridHeight}px"
+                  role="button"
+                  tabindex="0"
+                  aria-label="Book appointment with {prov.name}"
+                  onclick={(e) => onColumnClick(e, prov.id)}
+                  onkeydown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onColumnClick(e as unknown as MouseEvent, prov.id); } }}
+                >
+                  {#each timeTicks as tick}
+                    <div class="h-line" style="top: {tick.top}px" aria-hidden="true"></div>
+                  {/each}
 
-                {#if provEnd < closeMins}
-                  <div class="unavail" style="top: {((provEnd - openMins) / 15) * SLOT_HEIGHT}px; height: {((closeMins - provEnd) / 15) * SLOT_HEIGHT}px" aria-hidden="true"></div>
-                {/if}
+                  {#if provStart > openMins}
+                    <div class="unavail" style="top: 0; height: {((provStart - openMins) / 15) * SLOT_HEIGHT}px" aria-hidden="true"></div>
+                  {/if}
 
-                {#each appts as appt}
-                  {@const apptMins = parseHHMM(appt.start_time.slice(11, 16))}
-                  {@const blockTop = ((apptMins - openMins) / 15) * SLOT_HEIGHT}
-                  {@const blockH = Math.max((appt.duration_minutes / 15) * SLOT_HEIGHT - 2, 20)}
-                  <button
-                    class="appt-block {statusBlockClass(appt.status)}"
-                    style="top: {blockTop}px; height: {blockH}px"
-                    onclick={(e) => { e.stopPropagation(); openDetail(appt.appointment_id); }}
-                    title="{appt.patient_name} · {appt.procedure_name} · {formatTime(appt.start_time)}"
-                    aria-label="{appt.patient_name}, {appt.procedure_name}, {formatTime(appt.start_time)}"
-                  >
-                    <span class="appt-time">{formatTime(appt.start_time)}</span>
-                    <span class="appt-patient">{appt.patient_name}</span>
-                    {#if appt.duration_minutes >= 30}
-                      <span class="appt-proc">{appt.procedure_name}</span>
-                    {/if}
-                  </button>
-                {/each}
-              </div>
-            {:else}
-              <div
-                class="provider-col provider-col-off"
-                style="height: {gridHeight}px"
-                aria-label="{prov.name} — not working {dayName}"
-              >
-                {#each timeTicks as tick}
-                  <div class="h-line" style="top: {tick.top}px" aria-hidden="true"></div>
-                {/each}
-                <div class="unavail unavail-full" style="top: 0; height: {gridHeight}px" aria-hidden="true"></div>
-                <span class="off-label">Not scheduled</span>
-              </div>
-            {/if}
-          {/each}
+                  {#if provEnd < closeMins}
+                    <div class="unavail" style="top: {((provEnd - openMins) / 15) * SLOT_HEIGHT}px; height: {((closeMins - provEnd) / 15) * SLOT_HEIGHT}px" aria-hidden="true"></div>
+                  {/if}
+
+                  {#each appts as appt}
+                    {@const apptMins = parseHHMM(appt.start_time.slice(11, 16))}
+                    {@const blockTop = ((apptMins - openMins) / 15) * SLOT_HEIGHT}
+                    {@const blockH = Math.max((appt.duration_minutes / 15) * SLOT_HEIGHT - 2, 20)}
+                    <button
+                      class="appt-block {statusBlockClass(appt.status)}"
+                      style="top: {blockTop}px; height: {blockH}px"
+                      onclick={(e) => { e.stopPropagation(); openDetail(appt.appointment_id); }}
+                      title="{appt.patient_name} · {appt.procedure_name} · {formatTime(appt.start_time)}"
+                      aria-label="{appt.patient_name}, {appt.procedure_name}, {formatTime(appt.start_time)}"
+                    >
+                      <span class="appt-time">{formatTime(appt.start_time)}</span>
+                      <span class="appt-patient">{appt.patient_name}</span>
+                      {#if appt.duration_minutes >= 30}
+                        <span class="appt-proc">{appt.procedure_name}</span>
+                      {/if}
+                    </button>
+                  {/each}
+                </div>
+              {:else}
+                <div
+                  class="provider-col provider-col-off"
+                  style="height: {gridHeight}px"
+                  aria-label="{prov.name} — not working {dayName}"
+                >
+                  {#each timeTicks as tick}
+                    <div class="h-line" style="top: {tick.top}px" aria-hidden="true"></div>
+                  {/each}
+                  <div class="unavail unavail-full" style="top: 0; height: {gridHeight}px" aria-hidden="true"></div>
+                  <span class="off-label">Not scheduled</span>
+                </div>
+              {/if}
+            {/each}
+          </div>
         </div>
-      </div>
+      {/if}
     {/if}
   {/if}
 </div>
@@ -1346,10 +1532,113 @@
   .note-text { font-size: var(--text-sm); color: var(--abyss-navy); margin: 0; }
   .add-note-form { display: flex; flex-direction: column; }
 
+  /* ── Reschedule box ──────────────────────────────────── */
+  .reschedule-box {
+    padding: var(--space-4);
+    background: var(--pearl-mist);
+    border: 1.5px solid var(--pearl-mist-dk);
+    border-radius: var(--radius-md);
+    margin-bottom: var(--space-5);
+  }
+  .reschedule-label {
+    font-family: var(--font-heading);
+    font-weight: 600;
+    color: var(--abyss-navy);
+    margin: 0 0 var(--space-3);
+    font-size: var(--text-sm);
+  }
+  .reschedule-actions {
+    display: flex;
+    gap: var(--space-2);
+    justify-content: flex-end;
+    margin-top: var(--space-3);
+  }
+
+  /* ── Provider toggle row (SCH-2) ─────────────────────── */
+  .provider-toggle-row {
+    display: flex;
+    justify-content: flex-end;
+    margin-bottom: var(--space-3);
+  }
+
+  /* ── Link button (looks like inline link) ────────────── */
+  .link-btn {
+    background: none;
+    border: none;
+    padding: 0;
+    color: var(--caribbean-teal);
+    text-decoration: underline;
+    cursor: pointer;
+    font-size: inherit;
+    font-family: inherit;
+  }
+  .link-btn:hover { color: var(--caribbean-teal-dk); }
+
   /* ── Shared ───────────────────────────────────────────── */
   .load-row {
     display: flex;
     align-items: center;
     gap: var(--space-3);
+  }
+
+  /* ── Print support ─────────────────────────────────────── */
+  .print-only-date {
+    display: none;
+  }
+
+  @media print {
+    /* Hide everything except the call list card */
+    :global(.app-nav),
+    :global(.skip-link),
+    .page-header,
+    .office-tabs,
+    .date-nav,
+    .grid-outer,
+    .grid-header,
+    .grid-body,
+    .empty-state,
+    .load-row {
+      display: none !important;
+    }
+
+    /* Hide the call list toggle button row */
+    .header-actions {
+      display: none !important;
+    }
+
+    /* Hide the date picker — date is shown in the card title */
+    input[type="date"] {
+      display: none !important;
+    }
+
+    /* Hide the Print button itself when printing */
+    .print-btn {
+      display: none !important;
+    }
+
+    /* Show the inline date text only when printing */
+    .print-only-date {
+      display: inline;
+      margin-left: 4px;
+      font-size: 11pt;
+      color: #333;
+    }
+
+    /* Make the call list card print cleanly */
+    .page-content {
+      padding: 0;
+      background: white;
+    }
+
+    .card {
+      box-shadow: none;
+      border: none;
+      margin: 0;
+    }
+
+    .call-table {
+      width: 100%;
+      font-size: 11pt;
+    }
   }
 </style>

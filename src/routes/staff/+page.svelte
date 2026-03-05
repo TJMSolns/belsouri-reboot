@@ -449,6 +449,17 @@
                   {#if roleAdding}<span class="spinner" aria-hidden="true"></span><span class="sr-only">Adding role</span>{:else}Add Role{/if}
                 </button>
               </div>
+              <!-- Provider role guidance (SCH-3) -->
+              {#if sm.roles.includes("Provider")}
+                <div class="provider-role-hint">
+                  <svg class="hint-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" width="16" height="16"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                  <span>
+                    Provider role · To schedule appointments for {sm.name},
+                    register them in <a href="/setup">Setup → Providers</a>
+                    and assign an office with availability.
+                  </span>
+                </div>
+              {/if}
             </section>
 
             <!-- PIN -->
@@ -699,6 +710,33 @@
   .remove-role-btn { background: none; border: none; cursor: pointer; color: var(--slate-fog); font-size: 0.7rem; padding: 0; line-height: 1; }
   .remove-role-btn:hover { color: var(--healthy-coral-dk); }
   .add-role-row { display: flex; gap: var(--space-2); align-items: center; margin-top: var(--space-2); }
+
+  /* ── Provider role hint (SCH-3) ─────────────────────── */
+  .provider-role-hint {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--space-2);
+    margin-top: var(--space-3);
+    padding: var(--space-3);
+    background: var(--caribbean-teal-lt, #e6f7f8);
+    border: 1px solid var(--caribbean-teal);
+    border-radius: var(--radius-md);
+    font-size: var(--text-xs);
+    color: var(--abyss-navy);
+    font-family: var(--font-body);
+    line-height: 1.5;
+  }
+  .hint-icon {
+    flex-shrink: 0;
+    color: var(--caribbean-teal);
+    margin-top: 1px;
+  }
+  .provider-role-hint a {
+    color: var(--caribbean-teal);
+    font-weight: 600;
+    text-decoration: underline;
+  }
+  .provider-role-hint a:hover { color: var(--caribbean-teal-dk); }
 
   /* ── PIN ─────────────────────────────────────────────── */
   .pin-input {
