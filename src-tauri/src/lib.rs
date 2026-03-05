@@ -7,6 +7,7 @@ pub mod patient_management;
 pub mod staff_management;
 pub mod staff_scheduling;
 pub mod appointments;
+pub mod staff_shift;
 pub mod projections;
 pub mod seed;
 
@@ -42,6 +43,7 @@ use appointments::commands::{
     mark_appointment_no_show, add_appointment_note, get_schedule, get_appointment,
     get_provider_schedule, get_tomorrows_call_list,
 };
+use staff_shift::commands::{plan_staff_shift, cancel_staff_shift, get_shift_roster};
 use seed::commands::{seed_demo_data, archive_demo_data};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -77,6 +79,7 @@ pub fn run() {
                 book_appointment, reschedule_appointment, cancel_appointment, complete_appointment,
                 mark_appointment_no_show, add_appointment_note, get_schedule, get_appointment,
                 get_provider_schedule, get_tomorrows_call_list,
+                plan_staff_shift, cancel_staff_shift, get_shift_roster,
                 seed_demo_data, archive_demo_data,
             ])
             .export(
@@ -134,6 +137,7 @@ pub fn run() {
             book_appointment, reschedule_appointment, cancel_appointment, complete_appointment,
             mark_appointment_no_show, add_appointment_note, get_schedule, get_appointment,
             get_provider_schedule, get_tomorrows_call_list,
+            plan_staff_shift, cancel_staff_shift, get_shift_roster,
             seed_demo_data, archive_demo_data,
         ])
         .run(tauri::generate_context!())

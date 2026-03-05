@@ -120,6 +120,24 @@ pub struct StaffRoleRow {
     pub role: String,
 }
 
+// ── Staff Shift row types ─────────────────────────────────────────────────────
+
+#[derive(Debug, Clone)]
+pub struct StaffShiftRow {
+    pub shift_id: String,
+    pub staff_member_id: String,
+    pub staff_name: String,
+    pub office_id: String,
+    pub office_name: String,
+    pub date: String,
+    pub start_time: String,
+    pub end_time: String,
+    pub role: String,
+    pub created_by: String,
+    pub cancelled: bool,
+    pub cancel_reason: Option<String>,
+}
+
 // ── Appointment row types ─────────────────────────────────────────────────────
 
 #[derive(Debug, Clone)]
@@ -376,6 +394,22 @@ impl ProjectionStore {
             );
             CREATE INDEX IF NOT EXISTS idx_appointment_notes_appt
                 ON appointment_notes(appointment_id);
+            CREATE TABLE IF NOT EXISTS staff_shift_roster (
+                shift_id TEXT PRIMARY KEY,
+                staff_member_id TEXT NOT NULL,
+                staff_name TEXT NOT NULL,
+                office_id TEXT NOT NULL,
+                office_name TEXT NOT NULL,
+                date TEXT NOT NULL,
+                start_time TEXT NOT NULL,
+                end_time TEXT NOT NULL,
+                role TEXT NOT NULL,
+                created_by TEXT NOT NULL,
+                cancelled INTEGER NOT NULL DEFAULT 0,
+                cancel_reason TEXT
+            );
+            CREATE INDEX IF NOT EXISTS idx_staff_shift_roster_date
+                ON staff_shift_roster(date);
         ")?;
         // Migrations for existing databases (ignore "duplicate column" errors)
         let _ = self.conn.execute_batch("ALTER TABLE offices ADD COLUMN address_line_1 TEXT;");
@@ -1440,6 +1474,111 @@ impl ProjectionStore {
             Ok(r) => Ok(Some(r)),
             Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
             Err(e) => Err(e.into()),
+        }
+    }
+
+    // ── Staff Shift roster methods ────────────────────────────────────────────
+
+    pub fn insert_staff_shift(&self, row: &StaffShiftRow) -> Result<()> {
+        self.conn.execute(
+            "INSERT OR IGNORE INTO staff_shift_roster
+             (shift_id, staff_member_id, staff_name, office_id, office_name,
+              date, start_time, end_time, role, created_by, cancelled, cancel_reason)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
+            params![
+                row.shift_id, row.staff_member_id, row.staff_name,
+                row.office_id, row.office_name, row.date,
+                row.start_time, row.end_time, row.role, row.created_by,
+                row.cancelled as i32, row.cancel_reason
+            ],
+        )?;
+        Ok(())
+    }
+
+    pub fn cancel_staff_shift(&self, shift_id: &str, cancel_reason: Option<&str>) -> Result<()> {
+        self.conn.execute(
+            "UPDATE staff_shift_roster SET cancelled = 1, cancel_reason = ?2 WHERE shift_id = ?1",
+            params![shift_id, cancel_reason],
+        )?;
+        Ok(())
+    }
+
+    pub fn get_shift(&self, shift_id: &str) -> Result<Option<StaffShiftRow>> {
+        let r: SqlResult<StaffShiftRow> = self.conn.query_row(
+            "SELECT shift_id, staff_member_id, staff_name, office_id, office_name,
+                    date, start_time, end_time, role, created_by, cancelled, cancel_reason
+             FROM staff_shift_roster WHERE shift_id = ?1",
+            params![shift_id],
+            |row| Ok(StaffShiftRow {
+                shift_id: row.get(0)?,
+                staff_member_id: row.get(1)?,
+                staff_name: row.get(2)?,
+                office_id: row.get(3)?,
+                office_name: row.get(4)?,
+                date: row.get(5)?,
+                start_time: row.get(6)?,
+                end_time: row.get(7)?,
+                role: row.get(8)?,
+                created_by: row.get(9)?,
+                cancelled: row.get::<_, i32>(10)? != 0,
+                cancel_reason: row.get(11)?,
+            }),
+        );
+        match r {
+            Ok(v) => Ok(Some(v)),
+            Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+            Err(e) => Err(e.into()),
+        }
+    }
+
+    /// Returns shifts where date BETWEEN week_start AND week_end,
+    /// optionally filtered by office_id.
+    pub fn get_shifts_for_week(
+        &self,
+        week_start: &str,
+        week_end: &str,
+        office_id: Option<&str>,
+    ) -> Result<Vec<StaffShiftRow>> {
+        let map_row = |row: &rusqlite::Row<'_>| -> rusqlite::Result<StaffShiftRow> {
+            Ok(StaffShiftRow {
+                shift_id: row.get(0)?,
+                staff_member_id: row.get(1)?,
+                staff_name: row.get(2)?,
+                office_id: row.get(3)?,
+                office_name: row.get(4)?,
+                date: row.get(5)?,
+                start_time: row.get(6)?,
+                end_time: row.get(7)?,
+                role: row.get(8)?,
+                created_by: row.get(9)?,
+                cancelled: row.get::<_, i32>(10)? != 0,
+                cancel_reason: row.get(11)?,
+            })
+        };
+
+        let cols = "shift_id, staff_member_id, staff_name, office_id, office_name,
+                    date, start_time, end_time, role, created_by, cancelled, cancel_reason";
+
+        if let Some(oid) = office_id {
+            let mut stmt = self.conn.prepare(&format!(
+                "SELECT {} FROM staff_shift_roster
+                 WHERE date >= ?1 AND date <= ?2 AND office_id = ?3
+                 ORDER BY date ASC, start_time ASC",
+                cols
+            ))?;
+            let rows = stmt.query_map(params![week_start, week_end, oid], map_row)?
+                .collect::<SqlResult<Vec<_>>>()?;
+            Ok(rows)
+        } else {
+            let mut stmt = self.conn.prepare(&format!(
+                "SELECT {} FROM staff_shift_roster
+                 WHERE date >= ?1 AND date <= ?2
+                 ORDER BY date ASC, start_time ASC",
+                cols
+            ))?;
+            let rows = stmt.query_map(params![week_start, week_end], map_row)?
+                .collect::<SqlResult<Vec<_>>>()?;
+            Ok(rows)
         }
     }
 
