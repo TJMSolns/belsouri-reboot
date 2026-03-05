@@ -10,36 +10,63 @@ jobs:
   backend:
     name: Rust backend
     runs-on: ubuntu-latest
+
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy
-      - uses: Swatinem/rust-cache@v2
+
+      - name: Rust cache
+        uses: Swatinem/rust-cache@v2
         with:
           workspaces: src-tauri
+
+      # Tauri v2 requires WebKit 4.1 headers at compile time even for headless cargo test
+      - name: Install system deps (Linux)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libgtk-3-dev \
+            libwebkit2gtk-4.1-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            patchelf
+
       - name: Build
         run: cd src-tauri && cargo build
+
       - name: Tests
         run: cd src-tauri && cargo test
+
       - name: Clippy
         run: cd src-tauri && cargo clippy -- -D warnings
 
   frontend:
     name: Frontend + IPC contracts
     runs-on: ubuntu-latest
+
     steps:
       - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
         with:
           version: 9
-      - uses: actions/setup-node@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: pnpm
-      - name: Install dependencies
+
+      - name: Install frontend deps
         run: pnpm install
+
       - name: IPC contract check (rename_all + snake_case keys)
         run: pnpm check:ipc
-      - name: TypeScript check
+
+      - name: Frontend type check
         run: pnpm check

@@ -1,0 +1,83 @@
+name: Build
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+# TODO (post-MVP): Add code signing secrets for each platform:
+#   - macOS: APPLE_CERTIFICATE, APPLE_CERTIFICATE_PASSWORD, APPLE_SIGNING_IDENTITY,
+#            APPLE_ID, APPLE_PASSWORD, APPLE_TEAM_ID
+#   - Windows: WINDOWS_CERTIFICATE, WINDOWS_CERTIFICATE_PASSWORD
+#   - Linux: No signing required for AppImage/deb
+# Add them to tauri-action with:
+#   with:
+#     args: --target <target>
+# and set env: APPLE_* / TAURI_PRIVATE_KEY / TAURI_KEY_PASSWORD accordingly.
+
+jobs:
+  build:
+    name: Build (${{ matrix.platform }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            platform: linux
+          - os: windows-latest
+            platform: windows
+          - os: macos-latest
+            platform: macos
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Rust cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      # Tauri v2 requires WebKit 4.1 — not available on ubuntu-22.04 default repos;
+      # ubuntu-latest (24.04) ships webkit2gtk 4.1 in its standard repos.
+      - name: Install system deps (Linux only)
+        if: matrix.platform == 'linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libgtk-3-dev \
+            libwebkit2gtk-4.1-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            patchelf
+
+      - name: Install frontend deps
+        run: pnpm install
+
+      # tauri-action runs pnpm build (via beforeBuildCommand in tauri.conf.json)
+      # then compiles the Rust binary and packages the installer for the target platform.
+      - name: Build Tauri app
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: ${{ github.ref_name }}
+          releaseName: 'Belsouri ${{ github.ref_name }}'
+          releaseBody: 'See CHANGELOG for details.'
+          releaseDraft: true
+          prerelease: false
