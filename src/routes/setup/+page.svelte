@@ -1,9 +1,13 @@
 <script lang="ts">
+  import { onMount } from "svelte";
+  import { commands } from "$lib/bindings";
+  import type { PracticeDto, OfficeDto, ProviderDto, ProcedureTypeDto } from "$lib/bindings";
   import PracticeTab from "$lib/components/setup/PracticeTab.svelte";
   import OfficesTab from "$lib/components/setup/OfficesTab.svelte";
   import ProvidersTab from "$lib/components/setup/ProvidersTab.svelte";
   import ProcedureTypesTab from "$lib/components/setup/ProcedureTypesTab.svelte";
   import DemoDataTab from "$lib/components/setup/DemoDataTab.svelte";
+  import SetupChecklist from "$lib/components/setup/SetupChecklist.svelte";
 
   type Tab = "practice" | "offices" | "providers" | "procedures" | "demo";
   let activeTab = $state<Tab>("practice");
@@ -15,12 +19,54 @@
     { id: "procedures", label: "Procedure Types" },
     { id: "demo", label: "Demo Data" },
   ];
+
+  // ── Checklist data ──────────────────────────────────────────────
+  let practice = $state<PracticeDto | null>(null);
+  let offices = $state<OfficeDto[]>([]);
+  let providers = $state<ProviderDto[]>([]);
+  let procedureTypes = $state<ProcedureTypeDto[]>([]);
+
+  async function reloadSetupData() {
+    const [pRes, oRes, pvRes, ptRes] = await Promise.all([
+      commands.getPractice(),
+      commands.listOffices(),
+      commands.listProviders(),
+      commands.listProcedureTypes(),
+    ]);
+    if (pRes.status === "ok") practice = pRes.data;
+    if (oRes.status === "ok") offices = oRes.data;
+    if (pvRes.status === "ok") providers = pvRes.data;
+    if (ptRes.status === "ok") procedureTypes = ptRes.data;
+  }
+
+  onMount(() => {
+    reloadSetupData();
+  });
+
+  // Reload checklist data whenever the active tab changes so the checklist
+  // reflects any changes the user just made on a tab.
+  $effect(() => {
+    if (activeTab) reloadSetupData();
+  });
+
+  let practiceComplete = $derived(!!practice?.name);
+  let officesComplete = $derived(offices.filter((o) => !o.archived).length > 0);
+  let providersComplete = $derived(providers.filter((p) => !p.archived).length > 0);
+  let proceduresComplete = $derived(procedureTypes.filter((pt) => pt.is_active).length > 0);
 </script>
 
 <div class="setup-page">
   <header class="setup-header">
     <h1>Practice Setup</h1>
   </header>
+
+  <SetupChecklist
+    {practiceComplete}
+    {officesComplete}
+    {providersComplete}
+    {proceduresComplete}
+    onGoTo={(tab) => (activeTab = tab as Tab)}
+  />
 
   <div class="tab-bar" role="tablist" aria-label="Setup sections">
     {#each tabs as tab}
