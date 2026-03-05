@@ -395,19 +395,19 @@
   }
 
   async function doComplete(apptId: string) {
+    const patientName = detailData?.appointment.patient_name ?? "Appointment";
+    const apptTimeLabel = detailData ? ` at ${formatTime(detailData.appointment.start_time)}` : "";
     const ok = await confirm({
-      title: "Complete appointment",
-      message: "Mark this appointment as completed?",
+      title: "Mark appointment complete",
+      message: `Mark ${patientName}${apptTimeLabel} as completed?`,
       confirmLabel: "Mark complete",
     });
     if (!ok) return;
-    const patientName = detailData?.appointment.patient_name ?? "Appointment";
-    const apptTime = detailData ? ` at ${formatTime(detailData.appointment.start_time)}` : "";
     completingAppt = true;
     const res = await commands.completeAppointment(apptId, STAFF_ID);
     completingAppt = false;
     if (res.status === "ok") {
-      toast.success(`${patientName}${apptTime} marked complete.`);
+      toast.success(`${patientName}${apptTimeLabel} marked complete.`);
       closeDetail();
       await loadGrid();
     } else {
@@ -416,20 +416,20 @@
   }
 
   async function doNoShow(apptId: string) {
+    const patientName = detailData?.appointment.patient_name ?? "Appointment";
+    const apptTimeLabel = detailData ? ` at ${formatTime(detailData.appointment.start_time)}` : "";
     const ok = await confirm({
       title: "Mark no-show",
-      message: "Mark this patient as a no-show?",
+      message: `Mark ${patientName}${apptTimeLabel} as a no-show?`,
       confirmLabel: "Mark no-show",
       destructive: true,
     });
     if (!ok) return;
-    const patientName = detailData?.appointment.patient_name ?? "Appointment";
-    const apptTime = detailData ? ` at ${formatTime(detailData.appointment.start_time)}` : "";
     noShowingAppt = true;
     const res = await commands.markAppointmentNoShow(apptId, STAFF_ID);
     noShowingAppt = false;
     if (res.status === "ok") {
-      toast.success(`${patientName}${apptTime} marked no-show.`);
+      toast.success(`${patientName}${apptTimeLabel} marked no-show.`);
       closeDetail();
       await loadGrid();
     } else {
@@ -536,7 +536,7 @@
   });
 
   $effect(() => {
-    if (selectedOfficeId && selectedDate) loadGrid();
+    if (selectedOfficeId && selectedDate) { showAllProviders = false; loadGrid(); }
   });
 
   $effect(() => {
@@ -750,15 +750,15 @@
             </div>
           {:else}
             <div class="cancel-confirm-box">
-              <p class="cancel-confirm-label">Cancel this appointment?</p>
+              <p class="cancel-confirm-label">Cancel {appt.patient_name}'s appointment?</p>
               <div class="form-field">
                 <label class="field-label" for="cancel-reason">Reason (optional)</label>
                 <textarea id="cancel-reason" bind:value={cancelReason} rows={2} placeholder="e.g. Patient called to cancel"></textarea>
               </div>
               <div class="cancel-confirm-actions">
                 <button class="btn btn-ghost btn-sm" onclick={() => (showCancelConfirm = false)}>Go back</button>
-                <button class="btn btn-destructive btn-sm" onclick={() => doCancel(appt.appointment_id)}>
-                  Confirm cancellation
+                <button class="btn btn-destructive btn-sm" onclick={() => doCancel(appt.appointment_id)} disabled={cancellingAppt}>
+                  {#if cancellingAppt}<span class="spinner" aria-hidden="true"></span><span class="sr-only">Cancelling</span>{:else}Confirm cancellation{/if}
                 </button>
               </div>
             </div>

@@ -62,12 +62,13 @@
   }
 
   async function register() {
-    if (!newName.trim()) { registerError = "Name is required."; return; }
+    if (!newName.trim()) { registerError = "Provider name is required."; return; }
     registering = true; registerError = null;
     const r = await commands.registerProvider(newName.trim(), newType);
     registering = false;
     if (r.status === "ok") {
       providers = [...providers, r.data].sort((a, b) => a.name.localeCompare(b.name));
+      toast.success(`${newName} registered as ${newType}.`);
       newName = ""; showRegister = false;
     } else { registerError = r.error; }
   }
@@ -162,18 +163,23 @@
 
   async function addException(pid: string) {
     const f = excForm[pid];
-    if (!f?.start || !f?.end) { actionError = { ...actionError, [pid]: "Start and end date are required." }; return; }
+    if (!f?.start || !f?.end) { actionError = { ...actionError, [pid]: "Exception start and end dates are required." }; return; }
     const r = await commands.setProviderException(pid, f.start, f.end, f.reason || null);
     if (r.status === "ok") {
       providers = providers.map((p) => p.id === pid ? r.data : p);
+      const prov = providers.find((p) => p.id === pid);
+      toast.success(`Exception added for ${prov?.name ?? "provider"}.`);
       excForm = { ...excForm, [pid]: { start: "", end: "", reason: "" } };
     } else { actionError = { ...actionError, [pid]: r.error }; }
   }
 
   async function removeException(pid: string, start: string, end: string) {
+    const prov = providers.find((p) => p.id === pid);
     const r = await commands.removeProviderException(pid, start, end);
-    if (r.status === "ok") providers = providers.map((p) => p.id === pid ? r.data : p);
-    else actionError = { ...actionError, [pid]: r.error };
+    if (r.status === "ok") {
+      providers = providers.map((p) => p.id === pid ? r.data : p);
+      toast.success(`Exception removed for ${prov?.name ?? "provider"}.`);
+    } else { actionError = { ...actionError, [pid]: r.error }; }
   }
 
   async function toggleArchive(provider: ProviderDto) {
@@ -235,8 +241,9 @@
   {#if providers.length === 0 && !showRegister}
     <div class="empty-state-block">
       <p class="empty">No providers registered yet.</p>
+      <button class="btn-primary" onclick={() => (showRegister = true)}>Register First Provider</button>
       <div class="providers-tip">
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" width="14" height="14"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" width="16" height="16"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
         <span>Staff members with the <strong>Provider</strong> role must also be registered here before they can be scheduled for appointments.</span>
       </div>
     </div>
@@ -376,7 +383,7 @@
               <label for="exc-end-{provider.id}" class="sr-only">Exception end date</label>
               <input id="exc-end-{provider.id}" type="date" bind:value={excForm[provider.id].end} />
               <label for="exc-reason-{provider.id}" class="sr-only">Reason (optional)</label>
-              <input id="exc-reason-{provider.id}" placeholder="Reason (optional)" bind:value={excForm[provider.id].reason} style="flex:1" />
+              <input id="exc-reason-{provider.id}" placeholder="e.g. Holiday" bind:value={excForm[provider.id].reason} style="flex:1" />
               <button type="submit" class="btn-sm">Add</button>
             </form>
           </div>
@@ -399,7 +406,7 @@
     align-items: flex-start;
     gap: var(--space-2);
     padding: var(--space-3);
-    background: #e6f7f8;
+    background: var(--caribbean-teal-lt);
     border: 1px solid var(--caribbean-teal);
     border-radius: var(--radius-sm);
     font-size: var(--text-xs);

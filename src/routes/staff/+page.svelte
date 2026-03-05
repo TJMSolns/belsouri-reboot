@@ -85,8 +85,8 @@
     const s = new Date(weekStart + "T12:00:00");
     const e = new Date(weekStart + "T12:00:00");
     e.setDate(e.getDate() + 6);
-    const sFmt = s.toLocaleDateString("en-US", { month: "short", day: "numeric" });
-    const eFmt = e.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+    const sFmt = s.toLocaleDateString("en-JM", { day: "numeric", month: "short" });
+    const eFmt = e.toLocaleDateString("en-JM", { day: "numeric", month: "short", year: "numeric" });
     return `${sFmt} – ${eFmt}`;
   }
 
@@ -95,12 +95,26 @@
   }
 
   function formatDayHeader(date: string): string {
-    return new Date(date + "T12:00:00").toLocaleDateString("en-US", {
-      weekday: "long", month: "short", day: "numeric",
+    return new Date(date + "T12:00:00").toLocaleDateString("en-JM", {
+      weekday: "long", day: "numeric", month: "short",
     });
   }
 
-  function formatApptTime(isoLocal: string): string { return isoLocal.slice(11, 16); }
+  function formatApptTime(isoLocal: string): string {
+    const [h, m] = isoLocal.slice(11, 16).split(":").map(Number);
+    const period = h < 12 ? "AM" : "PM";
+    const h12 = h % 12 === 0 ? 12 : h % 12;
+    return `${h12}:${m.toString().padStart(2, "0")} ${period}`;
+  }
+
+  function formatRoleName(role: string): string {
+    const labels: Record<string, string> = {
+      PracticeManager: "Practice Manager",
+      Provider: "Provider",
+      Staff: "Staff",
+    };
+    return labels[role] ?? role;
+  }
 
   async function loadProviderSchedule(providerId: string) {
     const weekEnd = getWeekEnd(providerWeekStart);
@@ -173,6 +187,7 @@
     registering = false;
     if (r.status === "ok") {
       staff = [...staff, r.data].sort((a, b) => a.name.localeCompare(b.name));
+      toast.success(`${regName} registered as ${formatRoleName(regRole)}.`);
       regName = ""; regPhone = ""; regEmail = ""; regChannel = ""; regRole = "Staff";
       showRegister = false;
     } else { regError = r.error; }
@@ -215,9 +230,10 @@
   }
 
   async function doResetPin(target_id: string) {
+    const targetName = staff.find((s) => s.staff_member_id === target_id)?.name ?? "this staff member";
     const ok = await confirm({
       title: "Reset PIN",
-      message: "Reset this staff member's PIN? They will need to set a new one before they can sign in.",
+      message: `Reset ${targetName}'s PIN? They will need to set a new one before they can sign in.`,
       confirmLabel: "Reset PIN",
       destructive: true,
     });
@@ -231,7 +247,7 @@
     pinSaving = false;
     if (r.status === "ok") {
       staff = staff.map((s) => s.staff_member_id === target_id ? r.data : s);
-      toast.success("PIN reset.");
+      toast.success(`${targetName}'s PIN has been reset.`);
     } else { pinError = r.error; }
   }
 
@@ -263,9 +279,10 @@
   }
 
   async function doArchive(id: string) {
+    const memberName = staff.find((s) => s.staff_member_id === id)?.name ?? "this staff member";
     const ok = await confirm({
-      title: "Archive staff member",
-      message: "This will deactivate their account. You can restore it later.",
+      title: `Archive ${memberName}?`,
+      message: `This will deactivate ${memberName}'s account. You can restore it later.`,
       confirmLabel: "Archive",
       destructive: true,
     });
@@ -274,7 +291,7 @@
     if (r.status === "ok") {
       staff = staff.map((s) => s.staff_member_id === id ? r.data : s);
       if (expandedId === id) expandedId = null;
-      toast.success("Staff member archived.");
+      toast.success(`${memberName} archived.`);
     } else { toast.error(r.error); }
   }
 
@@ -348,7 +365,7 @@
         <div class="field" style="max-width:140px">
           <label for="reg-role">Initial Role</label>
           <select id="reg-role" bind:value={regRole}>
-            {#each ROLES as r}<option>{r}</option>{/each}
+            {#each ROLES as r}<option value={r}>{formatRoleName(r)}</option>{/each}
           </select>
         </div>
       </div>
@@ -402,7 +419,7 @@
           <div class="staff-info">
             <span class="staff-name">{sm.name}</span>
             {#each sm.roles as role}
-              <span class="role-badge role-{role.toLowerCase()}">{role}</span>
+              <span class="role-badge role-{role.toLowerCase()}">{formatRoleName(role)}</span>
             {/each}
             {#if !sm.has_pin}
               <span class="badge no-pin-badge">No PIN</span>
@@ -430,12 +447,12 @@
               <div class="roles-list">
                 {#each sm.roles as role}
                   <span class="role-chip">
-                    {role}
+                    {formatRoleName(role)}
                     <button
                       class="remove-role-btn"
                       onclick={() => doRemoveRole(sm.staff_member_id, role)}
-                      title="Remove role"
-                      aria-label="Remove {role} role"
+                      title="Remove {formatRoleName(role)} role"
+                      aria-label="Remove {formatRoleName(role)} role from {sm.name}"
                     >✕</button>
                   </span>
                 {/each}
@@ -443,7 +460,7 @@
               <div class="add-role-row">
                 <label for="add-role-{sm.staff_member_id}" class="sr-only">Select role to add</label>
                 <select id="add-role-{sm.staff_member_id}" bind:value={roleToAdd}>
-                  {#each ROLES.filter((r) => !sm.roles.includes(r)) as r}<option>{r}</option>{/each}
+                  {#each ROLES.filter((r) => !sm.roles.includes(r)) as r}<option value={r}>{formatRoleName(r)}</option>{/each}
                 </select>
                 <button class="btn-sm" onclick={() => doAssignRole(sm.staff_member_id)} disabled={roleAdding}>
                   {#if roleAdding}<span class="spinner" aria-hidden="true"></span><span class="sr-only">Adding role</span>{:else}Add Role{/if}
