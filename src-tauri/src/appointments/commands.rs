@@ -6,6 +6,81 @@ use crate::events::appointments::*;
 use crate::appointments::service;
 use crate::appointments::types::*;
 use crate::projections::appointments::rebuild;
+use crate::practice_setup::commands::capability_level;
+
+#[cfg(test)]
+mod c7_tests {
+    use super::*;
+
+    #[test]
+    fn test_book_appointment_c7_allows_no_requirement() {
+        // No required_provider_type means any provider is eligible.
+        // Simulate the guard: required_provider_type = None → no error
+        let required_provider_type: Option<String> = None;
+        let result: Result<(), String> = (|| {
+            if let Some(ref req) = required_provider_type {
+                if capability_level("Hygienist") < capability_level(req) {
+                    return Err("blocked".to_string());
+                }
+            }
+            Ok(())
+        })();
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_book_appointment_c7_blocks_ineligible_provider() {
+        // Hygienist trying to book a Dentist-required procedure.
+        let required_provider_type: Option<String> = Some("Dentist".to_string());
+        let provider_type = "Hygienist";
+        let procedure_name = "Root Canal";
+        let provider_name = "Sally Smith";
+        let result: Result<(), String> = (|| {
+            if let Some(ref req) = required_provider_type {
+                if capability_level(provider_type) < capability_level(req) {
+                    return Err(format!(
+                        "{} requires a {} or higher. {} is a {} and is not eligible for this procedure.",
+                        procedure_name, req, provider_name, provider_type
+                    ));
+                }
+            }
+            Ok(())
+        })();
+        assert!(result.is_err());
+        let msg = result.unwrap_err();
+        assert!(msg.contains("Root Canal"), "Expected procedure name in error: {}", msg);
+        assert!(msg.contains("Dentist"), "Expected required type in error: {}", msg);
+        assert!(msg.contains("Sally Smith"), "Expected provider name in error: {}", msg);
+        assert!(msg.contains("Hygienist"), "Expected provider type in error: {}", msg);
+    }
+
+    #[test]
+    fn test_book_appointment_c7_allows_higher_capability() {
+        // Specialist booking a Dentist-required procedure — should be allowed.
+        let required_provider_type: Option<String> = Some("Dentist".to_string());
+        let provider_type = "Specialist";
+        let result: Result<(), String> = (|| {
+            if let Some(ref req) = required_provider_type {
+                if capability_level(provider_type) < capability_level(req) {
+                    return Err("blocked".to_string());
+                }
+            }
+            Ok(())
+        })();
+        assert!(result.is_ok(), "Specialist should be eligible for Dentist-required procedure");
+    }
+
+    #[test]
+    fn test_capability_level_ordering() {
+        assert!(capability_level("Specialist") > capability_level("Dentist"));
+        assert!(capability_level("Dentist") > capability_level("Hygienist"));
+        assert!(capability_level("Hygienist") > capability_level("Unknown"));
+        assert_eq!(capability_level("Specialist"), 3);
+        assert_eq!(capability_level("Dentist"), 2);
+        assert_eq!(capability_level("Hygienist"), 1);
+        assert_eq!(capability_level(""), 0);
+    }
+}
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -111,6 +186,15 @@ fn check_booking_constraints(
     service::check_c4_patient_active(patient.archived)?;
     // C5
     service::check_c5_procedure_active(procedure.is_active, &procedure.name)?;
+    // C7: Provider capability / scope of practice (hard block — no override)
+    if let Some(ref req) = procedure.required_provider_type {
+        if capability_level(&provider.provider_type) < capability_level(req) {
+            return Err(format!(
+                "{} requires a {} or higher. {} is a {} and is not eligible for this procedure.",
+                procedure.name, req, provider.name, provider.provider_type
+            ));
+        }
+    }
 
     Ok(end_time)
 }

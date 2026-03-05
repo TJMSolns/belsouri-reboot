@@ -154,6 +154,7 @@ mod tests {
             category: "Preventive".to_string(),
             default_duration_minutes: 60,
             is_active: true,
+            required_provider_type: None,
         }).unwrap();
 
         // seed provider

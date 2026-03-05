@@ -16,7 +16,7 @@
 
   let offices = $state<OfficeDto[]>([]);
   let allProviders = $state<ProviderDto[]>([]);
-  let procedures = $state<{ id: string; name: string; default_duration_minutes: number; is_active: boolean }[]>([]);
+  let procedures = $state<{ id: string; name: string; default_duration_minutes: number; is_active: boolean; required_provider_type: string | null }[]>([]);
 
   // ── Grid view ─────────────────────────────────────────────────────────────
 
@@ -111,15 +111,28 @@
     })(),
   );
 
+  let isToday = $derived(selectedDate === todayLocal());
+
+  // Capability levels matching the Rust implementation
+  const CAPABILITY_LEVELS: Record<string, number> = { Specialist: 3, Dentist: 2, Hygienist: 1 };
+
+  let eligibleBookRoster = $derived((() => {
+    const proc = procedures.find((p) => p.id === bookProcedureId);
+    if (!proc?.required_provider_type) return bookRoster;
+    const req = CAPABILITY_LEVELS[proc.required_provider_type] ?? 0;
+    return bookRoster.filter((entry) => {
+      const prov = allProviders.find((p) => p.id === entry.provider_id);
+      return (CAPABILITY_LEVELS[prov?.provider_type ?? ""] ?? 0) >= req;
+    });
+  })());
+
   let availableSlots = $derived(
     (() => {
-      const entry = bookRoster.find((e) => e.provider_id === bookProviderId);
+      const entry = eligibleBookRoster.find((e) => e.provider_id === bookProviderId);
       if (!entry) return [];
       return generateTimeSlots(entry.start_time, entry.end_time);
     })(),
   );
-
-  let isToday = $derived(selectedDate === todayLocal());
 
   let reschedAvailableSlots = $derived(
     (() => {
@@ -543,6 +556,16 @@
     if (showBookForm && bookOfficeId && bookStartDate) loadBookRoster();
   });
 
+  // When procedure changes and the selected provider is no longer eligible, deselect them.
+  $effect(() => {
+    if (bookProviderId && eligibleBookRoster.length > 0) {
+      const stillEligible = eligibleBookRoster.some((e) => e.provider_id === bookProviderId);
+      if (!stillEligible) { bookProviderId = ""; bookStartTime = ""; }
+    } else if (bookProviderId && eligibleBookRoster.length === 0 && bookProcedureId) {
+      bookProviderId = ""; bookStartTime = "";
+    }
+  });
+
   $effect(() => {
     if (showReschedule && reschedOfficeId && reschedDate) loadReschedRoster();
   });
@@ -591,9 +614,17 @@
             No providers scheduled on {formatDisplayDate(bookStartDate)} at this office.
             <a href="/setup">Set availability in Setup → Providers</a>.
           </p>
+        {:else if eligibleBookRoster.length === 0 && bookProcedureId}
+          {@const proc = procedures.find((p) => p.id === bookProcedureId)}
+          <div class="field-error" role="alert">
+            <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true" style="flex-shrink:0"><circle cx="8" cy="8" r="6"/><line x1="8" y1="5" x2="8" y2="8"/><line x1="8" y1="11" x2="8" y2="11.5" stroke-width="2"/></svg>
+            No eligible providers for {proc?.name ?? "this procedure"} on {formatDisplayDate(bookStartDate)}.
+            {proc?.required_provider_type ? `${proc.name} requires a ${proc.required_provider_type} or higher.` : ""}
+            Try a different day or procedure.
+          </div>
         {:else}
           <div class="chip-group">
-            {#each bookRoster as entry}
+            {#each eligibleBookRoster as entry}
               <button
                 class="chip"
                 class:chip-selected={bookProviderId === entry.provider_id}

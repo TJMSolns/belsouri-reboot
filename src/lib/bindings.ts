@@ -294,6 +294,14 @@ async listProcedureTypes() : Promise<Result<ProcedureTypeDto[], string>> {
     else return { status: "error", error: e  as any };
 }
 },
+async setProcedureTypeCapability(id: string, requiredProviderType: string | null) : Promise<Result<ProcedureTypeDto, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("set_procedure_type_capability", { id, requiredProviderType }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
 async registerPatient(firstName: string, lastName: string, phone: string | null, email: string | null, preferredContactChannel: string | null, preferredOfficeId: string | null, dateOfBirth: string | null, registeredBy: string) : Promise<Result<RegisterPatientResult, string>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("register_patient", { firstName, lastName, phone, email, preferredContactChannel, preferredOfficeId, dateOfBirth, registeredBy }) };
@@ -641,7 +649,7 @@ export type PatientNoteDto = { note_id: string; patient_id: string; text: string
  */
 export type PatientWithNotesDto = { patient: PatientDto; notes: PatientNoteDto[] }
 export type PracticeDto = { name: string; phone: string | null; email: string | null; website: string | null; address_line_1: string | null; address_line_2: string | null; city_town: string | null; subdivision: string | null; country: string | null }
-export type ProcedureTypeDto = { id: string; name: string; category: string; default_duration_minutes: number; is_active: boolean }
+export type ProcedureTypeDto = { id: string; name: string; category: string; default_duration_minutes: number; is_active: boolean; required_provider_type: string | null }
 export type ProviderAvailabilityResult = { available: boolean; reason: string | null }
 export type ProviderDto = { id: string; name: string; provider_type: string; office_ids: string[]; availability: AvailabilityWindowDto[]; exceptions: AvailabilityExceptionDto[]; archived: boolean }
 export type ProviderScheduleEntry = { provider_id: string; provider_name: string; start_time: string; end_time: string }

@@ -1,5 +1,6 @@
 <script lang="ts">
   import { commands, type ProcedureTypeDto } from "$lib/bindings";
+  import { getErrorMessage } from "$lib/utils/api";
   import { onMount } from "svelte";
   import { toast } from "$lib/stores/toast";
   import { confirm } from "$lib/stores/confirm";
@@ -13,6 +14,13 @@
     Cosmetic: "#9b59b6",
     Diagnostic: "#95a5a6",
   };
+
+  const PROVIDER_TYPE_OPTIONS = [
+    { value: "", label: "Any provider" },
+    { value: "Hygienist", label: "Hygienist or higher" },
+    { value: "Dentist", label: "Dentist or higher" },
+    { value: "Specialist", label: "Specialist only" },
+  ];
 
   let types = $state<ProcedureTypeDto[]>([]);
   let error = $state<string | null>(null);
@@ -31,7 +39,9 @@
   let editName = $state("");
   let editCategory = $state("");
   let editDuration = $state(30);
+  let editReqType = $state("");
   let editError = $state<string | null>(null);
+  let savingCapability = $state(false);
 
   onMount(load);
 
@@ -71,24 +81,42 @@
     editName = pt.name;
     editCategory = pt.category;
     editDuration = pt.default_duration_minutes;
+    editReqType = pt.required_provider_type ?? "";
     editError = null;
   }
 
   async function saveEdit(id: string) {
     editError = null;
     const r = await commands.updateProcedureType(id, editName.trim() || null, editCategory, editDuration);
-    if (r.status === "ok") {
-      types = types.map((t) => t.id === id ? r.data : t);
-      editingId = null;
-    } else { editError = r.error; }
+    if (r.status !== "ok") { editError = r.error; return; }
+
+    // Save capability (only if changed)
+    savingCapability = true;
+    const capRes = await commands.setProcedureTypeCapability(id, editReqType || null);
+    savingCapability = false;
+    if (capRes.status !== "ok") { editError = getErrorMessage(capRes.error); return; }
+
+    types = types.map((t) => t.id === id ? capRes.data : t);
+    editingId = null;
+    toast.success(`"${capRes.data.name}" updated.`);
   }
 
   async function toggleActive(pt: ProcedureTypeDto) {
     const r = pt.is_active
       ? await commands.deactivateProcedureType(pt.id)
       : await commands.reactivateProcedureType(pt.id);
-    if (r.status === "ok") types = types.map((t) => t.id === pt.id ? r.data : t);
-    else error = r.error;
+    if (r.status === "ok") {
+      types = types.map((t) => t.id === pt.id ? r.data : t);
+      toast.success(`"${r.data.name}" ${r.data.is_active ? "reactivated" : "deactivated"}.`);
+    } else {
+      error = getErrorMessage(r.error);
+    }
+  }
+
+  function reqTypeLabel(val: string | null): string {
+    if (!val) return "";
+    const opt = PROVIDER_TYPE_OPTIONS.find((o) => o.value === val);
+    return opt ? opt.label : val;
   }
 
   let activeTypes = $derived(types.filter((t) => t.is_active));
@@ -159,7 +187,17 @@
               </select>
               <input type="number" min="15" max="240" bind:value={editDuration} style="width:80px" />
               <span class="duration-label">min</span>
-              <button class="btn-sm" onclick={() => saveEdit(pt.id)}>Save</button>
+              <div class="req-type-field">
+                <label class="field-label" for="req-type-{pt.id}">Required provider type</label>
+                <select id="req-type-{pt.id}" bind:value={editReqType}>
+                  {#each PROVIDER_TYPE_OPTIONS as opt}
+                    <option value={opt.value}>{opt.label}</option>
+                  {/each}
+                </select>
+              </div>
+              <button class="btn-sm" onclick={() => saveEdit(pt.id)} disabled={savingCapability}>
+                {#if savingCapability}<span class="spinner" aria-hidden="true"></span><span class="sr-only">Saving</span>{:else}Save{/if}
+              </button>
               <button class="btn-sm btn-ghost" onclick={() => (editingId = null)}>Cancel</button>
             </div>
           {:else}
@@ -168,6 +206,15 @@
               <span class="type-name">{pt.name}</span>
               <span class="badge cat-badge" style="background:{CATEGORY_COLORS[pt.category]}22; color:{CATEGORY_COLORS[pt.category]}">{pt.category}</span>
               <span class="meta">{pt.default_duration_minutes} min</span>
+              {#if pt.required_provider_type}
+                <span class="badge req-badge" title="Required provider type">
+                  <svg viewBox="0 0 16 16" width="11" height="11" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+                    <circle cx="8" cy="6" r="3"/>
+                    <path d="M2 14c0-3.3 2.7-6 6-6s6 2.7 6 6"/>
+                  </svg>
+                  {reqTypeLabel(pt.required_provider_type)}
+                </span>
+              {/if}
             </div>
             <div class="type-actions">
               <button class="btn-sm btn-ghost" onclick={() => startEdit(pt)}>Edit</button>
@@ -242,6 +289,9 @@
   .edit-row input { padding: var(--space-1) var(--space-2); border: 1px solid var(--pearl-mist-dk); border-radius: var(--radius-sm); font-size: var(--text-sm); font-family: var(--font-body); }
   .edit-row select { padding: var(--space-1) var(--space-2); border: 1px solid var(--pearl-mist-dk); border-radius: var(--radius-sm); font-size: var(--text-sm); font-family: var(--font-body); background: white; }
   .duration-label { font-size: var(--text-xs); color: var(--slate-fog); font-family: var(--font-body); }
+  .req-type-field { display: flex; flex-direction: column; gap: 2px; }
+  .req-type-field .field-label { font-size: var(--text-xs); font-weight: 600; color: var(--abyss-navy); font-family: var(--font-body); }
+  .req-badge { display: inline-flex; align-items: center; gap: 3px; background: var(--abyss-navy-11, rgba(10,20,50,0.08)); color: var(--abyss-navy); border: 1px solid var(--pearl-mist-dk); }
   .inactive-section { margin-top: var(--space-4); }
 
   .btn-primary {
