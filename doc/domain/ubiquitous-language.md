@@ -143,6 +143,15 @@ Living glossary of domain terms. Updated during Event Storming and throughout de
 |------|-----------|----------|-------|
 | **Staff Management** | The bounded context that manages the identity, roles, and PIN-based quick switching for all people who work at the practice. Entry point for "who is acting right now." | "HR", "user management", "authentication" | Thin by design. Upstream of all other contexts that need actor identity. Not an HR system. |
 
+### Staff Shift Terms (SCH-5 — confirmed by Tony 2026-03-05)
+
+| Term | Definition | Not This | Notes |
+|------|-----------|----------|-------|
+| **Shift** | A planned working period for a non-clinical staff member at a specific office on a specific date. Contains: who (staff_member_id), when (date + start_time + end_time), where (office_id), and which role they are performing. Created ad-hoc by either the staff member themselves or a Practice Manager. | "schedule", "rota", "assignment", "availability", "timetable" | Domain language: shifts are "planned" (verb: Plan). Not "created" or "scheduled". StaffShift is an aggregate in the Staff Management context. |
+| **Shift Roster** | A view of all planned shifts for a given time period (typically a week), showing who is working, when, and where across all non-clinical staff. Rendered on the Schedule page Roster tab. | "staff schedule", "weekly schedule", "timetable" | Query pattern: `WHERE date >= week_start AND date <= week_end`. Cancelled shifts are shown greyed out, not removed. |
+| **Plan a Shift** | The domain action of creating a new planned working period for a non-clinical staff member. | "create a shift", "schedule a shift", "add a shift" | Command: PlanStaffShift. Produces: StaffShiftPlanned event. Domain verb is "Plan" — consistent with the practice manager planning their team's week. |
+| **Cancel a Shift** | The domain action of marking a planned shift as no longer occurring. The shift record and its history are preserved. | "delete a shift", "remove a shift", "unschedule" | Command: CancelStaffShift. Produces: StaffShiftCancelled event. Soft cancel — event store is append-only. Canceller must be the shift owner or a Practice Manager. |
+
 ---
 
 ## Staff Scheduling Context

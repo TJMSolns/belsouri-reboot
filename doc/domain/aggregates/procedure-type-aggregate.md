@@ -1,7 +1,7 @@
 # ProcedureType Aggregate
 
 **Context**: Practice Setup
-**Last Updated**: 2026-03-03
+**Last Updated**: 2026-03-05
 
 ---
 
@@ -22,6 +22,7 @@ Examples: Cleaning (Preventive, 30 min), Root Canal (Invasive, 90 min), Consulta
 | category | ProcedureCategory | Yes | Color-coded grouping for calendar display |
 | default_duration_minutes | u32 | Yes | Standard appointment length. Range: 15-240 minutes. |
 | is_active | bool | Yes | Default true. Deactivated procedures hidden from scheduling. |
+| required_provider_type | ProviderType? | No | When set, only providers of this type or higher can be booked for this procedure. None = any provider eligible. |
 
 ### Value Objects
 
@@ -48,6 +49,7 @@ Nico confirmed all six categories are appropriate.
 | **ProcedureTypeUpdated** | id, name?, category?, default_duration_minutes? | Admin modifies any field |
 | **ProcedureTypeDeactivated** | id | Admin removes procedure from active list |
 | **ProcedureTypeReactivated** | id | Admin restores a deactivated procedure |
+| **ProcedureTypeCapabilitySet** | id, required_provider_type (Option&lt;String&gt;) | Admin sets or clears the required provider type for a procedure |
 
 ---
 
@@ -59,6 +61,7 @@ Nico confirmed all six categories are appropriate.
 | UpdateProcedureType | id, name?, category?, default_duration_minutes? | ProcedureTypeUpdated | at least one field changed, if duration changed must be 15-240 |
 | DeactivateProcedureType | id | ProcedureTypeDeactivated | currently active |
 | ReactivateProcedureType | id | ProcedureTypeReactivated | currently inactive |
+| SetProcedureTypeCapability | id, required_provider_type: Option&lt;String&gt; | ProcedureTypeCapabilitySet | procedure exists and is not deactivated |
 
 ---
 
@@ -68,6 +71,7 @@ Nico confirmed all six categories are appropriate.
 2. **Valid category**: Must be one of the six defined categories
 3. **Duration range**: Must be 15-240 minutes (MIN_DURATION to MAX_DURATION)
 4. **Deactivate, not delete**: Procedure types are deactivated, not archived or deleted. Historical appointment records reference them.
+5. **Valid required_provider_type**: When required_provider_type is set, it must be a valid ProviderType (Dentist, Hygienist, or Specialist)
 
 ---
 
@@ -111,6 +115,7 @@ The ProcedureType aggregate provides:
 1. **Default duration**: Used to calculate appointment end time when booking
 2. **Active status**: Only active procedure types are available for scheduling
 3. **Category color**: Used for calendar display (presentation concern, not a constraint)
+4. **Required provider type**: When set, the booking system enforces the capability ladder (Specialist ≥ Dentist ≥ Hygienist). The C7 booking constraint uses this field.
 
 ---
 
@@ -121,6 +126,8 @@ The ProcedureType aggregate provides:
 - **Category colors are fixed**: The six categories and their colors are defined by the system, not configurable per practice. Nico confirmed these cover dental practice needs.
 - **Duration is a default, not a constraint**: Individual appointments can override the default duration. The procedure type provides the starting value.
 - **Seed defaults as individual events**: No special `DefaultProceduresSeeded` event. Each seeded procedure is a standard `ProcedureTypeDefined` event, keeping the event store uniform.
+- **Capability is set per-procedure, not per-category**: Different procedures in the same category may require different provider types. For example, Extraction and Root Canal are both Invasive but may have different required_provider_type values.
+- **Setting required_provider_type = None clears the restriction**: Any provider may book when no capability is configured. Existing procedures have no required type by default — open access is preserved until the Practice Manager explicitly configures capability.
 
 ---
 

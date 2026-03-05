@@ -447,3 +447,174 @@ Feature: Staff Management
     When the Practice Manager removes role "PracticeManager" from "Dr. Spence"
     And the setup checklist is evaluated
     Then the staff management setup step is "incomplete"
+
+  # ─────────────────────────────────────────────────────────────
+  # STAFF SHIFT ROSTER (SCH-5)
+  # Phase 2.4 BDD Scenarios — StaffShift aggregate
+  # Date: 2026-03-05
+  # Confirmed by Tony (2026-03-05):
+  #   - Planned (future-facing), ad-hoc (not fixed weekly)
+  #   - Both PM and staff member themselves can plan shifts
+  #   - A Staff role holder cannot plan shifts for other staff members
+  #   - Role at shift time must be one of the staff member's assigned roles
+  #   - end_time must be strictly after start_time
+  #   - Cancelled shifts are soft-deleted — visible in history, greyed out in UI
+  #   - UI: Roster tab on Schedule page + per-person upcoming view on Staff page
+  #   - Shifts are informational — no booking constraints
+  # ─────────────────────────────────────────────────────────────
+
+  Background: Staff Shift Roster test data
+    Given the practice has offices "Kingston" and "Montego Bay"
+    And staff member "Maria Brown" exists with role "Staff" and is not archived
+    And staff member "John Clarke" exists with role "Staff" and is not archived
+    And "Dr. Reid" is an active Practice Manager
+
+  # ─────────────────────────────────────────────────────────────
+  # Rule SCH5-1: A Practice Manager can plan a shift for any active staff member
+  # ─────────────────────────────────────────────────────────────
+
+  Scenario: Practice Manager plans a shift for an active staff member
+    Given "Dr. Reid" holds the "PracticeManager" role
+    When "Dr. Reid" submits PlanStaffShift for "Maria Brown" at "Kingston" on "2026-03-09" from "09:00" to "17:00" with role "Staff"
+    Then a StaffShiftPlanned event is recorded with staff_member_id "Maria Brown", office "Kingston", date "2026-03-09", start_time "09:00", end_time "17:00", role "Staff", created_by "Dr. Reid"
+
+  Scenario: Practice Manager plans a shift for an archived staff member is rejected
+    Given staff member "Sandra Lee" is archived
+    When "Dr. Reid" submits PlanStaffShift for "Sandra Lee" at "Kingston" on "2026-03-09" from "09:00" to "17:00" with role "Staff"
+    Then no StaffShiftPlanned event is recorded
+    And an error is shown: "Staff member Sandra Lee is archived and cannot be assigned a shift"
+
+  Scenario: Practice Manager plans a shift for themselves
+    Given "Dr. Reid" holds role "PracticeManager"
+    When "Dr. Reid" submits PlanStaffShift for "Dr. Reid" at "Montego Bay" on "2026-03-10" from "08:00" to "16:00" with role "PracticeManager"
+    Then a StaffShiftPlanned event is recorded with staff_member_id "Dr. Reid" and created_by "Dr. Reid"
+
+  # ─────────────────────────────────────────────────────────────
+  # Rule SCH5-2: A staff member can plan their own shift
+  # ─────────────────────────────────────────────────────────────
+
+  Scenario: Staff member plans their own shift
+    When "Maria Brown" submits PlanStaffShift for herself at "Montego Bay" on "2026-03-13" from "09:00" to "17:00" with role "Staff"
+    Then a StaffShiftPlanned event is recorded with staff_member_id "Maria Brown" and created_by "Maria Brown"
+
+  Scenario: Staff member cannot plan a shift for a different staff member
+    When "Maria Brown" submits PlanStaffShift for "John Clarke" at "Kingston" on "2026-03-09" from "09:00" to "17:00" with role "Staff"
+    Then no StaffShiftPlanned event is recorded
+    And an error is shown: "Maria Brown does not have the Practice Manager role and cannot plan a shift for another staff member"
+
+  # ─────────────────────────────────────────────────────────────
+  # Rule SCH5-3: Role must be one assigned to the staff member
+  # ─────────────────────────────────────────────────────────────
+
+  Scenario: Shift with a role the staff member holds is accepted
+    Given "Maria Brown" holds role "Staff"
+    When "Dr. Reid" submits PlanStaffShift for "Maria Brown" at "Kingston" on "2026-03-09" from "09:00" to "17:00" with role "Staff"
+    Then a StaffShiftPlanned event is recorded with role "Staff"
+
+  Scenario: Shift with a role the staff member does not hold is rejected
+    Given "Maria Brown" holds role "Staff" only
+    When "Dr. Reid" submits PlanStaffShift for "Maria Brown" at "Kingston" on "2026-03-09" from "09:00" to "17:00" with role "PracticeManager"
+    Then no StaffShiftPlanned event is recorded
+    And an error is shown: "Maria Brown does not have the PracticeManager role and cannot plan a shift in that role"
+
+  Scenario: Staff member with multiple roles can plan a shift in either role
+    Given "Dr. Reid" holds roles "PracticeManager" and "Staff"
+    When "Dr. Reid" submits PlanStaffShift for "Dr. Reid" at "Kingston" on "2026-03-09" from "09:00" to "17:00" with role "Staff"
+    Then a StaffShiftPlanned event is recorded with role "Staff"
+
+  # ─────────────────────────────────────────────────────────────
+  # Rule SCH5-4: end_time must be strictly after start_time
+  # ─────────────────────────────────────────────────────────────
+
+  Scenario: Shift with valid time range is accepted
+    When "Dr. Reid" submits PlanStaffShift for "Maria Brown" at "Kingston" on "2026-03-09" from "09:00" to "17:00" with role "Staff"
+    Then a StaffShiftPlanned event is recorded with start_time "09:00" and end_time "17:00"
+
+  Scenario: Shift with end_time equal to start_time is rejected
+    When "Dr. Reid" submits PlanStaffShift for "Maria Brown" at "Kingston" on "2026-03-09" from "09:00" to "09:00" with role "Staff"
+    Then no StaffShiftPlanned event is recorded
+    And an error is shown: "Shift end time must be after start time"
+
+  Scenario: Shift with end_time before start_time is rejected
+    When "Dr. Reid" submits PlanStaffShift for "Maria Brown" at "Kingston" on "2026-03-09" from "17:00" to "09:00" with role "Staff"
+    Then no StaffShiftPlanned event is recorded
+    And an error is shown: "Shift end time must be after start time"
+
+  # ─────────────────────────────────────────────────────────────
+  # Rule SCH5-5: Shift can be cancelled by the shift owner or a Practice Manager
+  # ─────────────────────────────────────────────────────────────
+
+  Scenario: Practice Manager cancels a staff member's shift with a reason
+    Given "Maria Brown" has a planned shift at "Kingston" on "2026-03-09"
+    When "Dr. Reid" submits CancelStaffShift for that shift with reason "Office closed — public holiday"
+    Then a StaffShiftCancelled event is recorded with cancelled_by "Dr. Reid" and reason "Office closed — public holiday"
+
+  Scenario: Practice Manager cancels a shift with no reason
+    Given "Maria Brown" has a planned shift at "Kingston" on "2026-03-09"
+    When "Dr. Reid" submits CancelStaffShift for that shift with no reason
+    Then a StaffShiftCancelled event is recorded with cancelled_by "Dr. Reid" and reason null
+
+  Scenario: Staff member cancels their own shift
+    Given "Maria Brown" has a planned shift at "Kingston" on "2026-03-09"
+    When "Maria Brown" submits CancelStaffShift for her own shift
+    Then a StaffShiftCancelled event is recorded with cancelled_by "Maria Brown"
+
+  Scenario: Staff member cannot cancel another staff member's shift
+    Given "Maria Brown" has a planned shift at "Kingston" on "2026-03-09"
+    When "John Clarke" submits CancelStaffShift for Maria Brown's shift
+    Then no StaffShiftCancelled event is recorded
+    And an error is shown: "John Clarke does not have the Practice Manager role and cannot cancel another staff member's shift"
+
+  Scenario: Cancelling an already-cancelled shift is rejected
+    Given "Maria Brown" has a shift that has already been cancelled
+    When "Dr. Reid" submits CancelStaffShift for that shift
+    Then no StaffShiftCancelled event is recorded
+    And an error is shown: "This shift has already been cancelled"
+
+  Scenario: Cancelled shift remains visible in the roster with cancelled status
+    Given "Maria Brown" has a planned shift at "Kingston" on "2026-03-09"
+    When "Dr. Reid" submits CancelStaffShift for that shift with reason "Office closed — public holiday"
+    Then a StaffShiftCancelled event is recorded
+    And the staff_shift_roster projection contains the shift with cancelled "true" and cancel_reason "Office closed — public holiday"
+    And the original StaffShiftPlanned event is preserved in the event store
+
+  # ─────────────────────────────────────────────────────────────
+  # Rule SCH5-6: Roster view shows all staff for the selected week
+  # ─────────────────────────────────────────────────────────────
+
+  Scenario: Week roster shows all planned shifts across staff members
+    Given "Maria Brown" has planned shifts on "2026-03-09" (Monday) and "2026-03-11" (Wednesday) at "Kingston"
+    And "John Clarke" has a planned shift on "2026-03-10" (Tuesday) at "Montego Bay"
+    When the roster is queried for the week "2026-03-09" to "2026-03-15"
+    Then the query returns 3 shift rows
+    And one row shows "Maria Brown" at "Kingston" on "2026-03-09"
+    And one row shows "Maria Brown" at "Kingston" on "2026-03-11"
+    And one row shows "John Clarke" at "Montego Bay" on "2026-03-10"
+
+  Scenario: Week roster shows cancelled shifts greyed out rather than removing them
+    Given "Maria Brown" has planned shifts on "2026-03-09" and "2026-03-11" at "Kingston"
+    And the shift on "2026-03-09" has been cancelled
+    When the roster is queried for the week "2026-03-09" to "2026-03-15"
+    Then the query returns 2 shift rows
+    And the row for "2026-03-09" has cancelled "true"
+    And the row for "2026-03-11" has cancelled "false"
+
+  # ─────────────────────────────────────────────────────────────
+  # Rule SCH5-7: Per-person view shows upcoming shifts on the Staff page
+  # ─────────────────────────────────────────────────────────────
+
+  Scenario: Per-person view returns upcoming shifts for a specific staff member
+    Given "Maria Brown" has a planned shift on "2026-03-09" at "Kingston"
+    And "Maria Brown" has a planned shift on "2026-03-16" at "Montego Bay"
+    And today is "2026-03-05"
+    When the per-person shift list is queried for "Maria Brown" from "2026-03-05" onwards
+    Then both shifts appear in the results ordered by date
+    And "John Clarke"'s shifts do not appear
+
+  Scenario: Per-person view excludes past shifts
+    Given "Maria Brown" had a shift on "2026-03-01" (past) at "Kingston"
+    And "Maria Brown" has an upcoming shift on "2026-03-09" at "Kingston"
+    And today is "2026-03-05"
+    When the per-person shift list is queried for "Maria Brown" from "2026-03-05" onwards
+    Then only the "2026-03-09" shift appears in the results
+    And the "2026-03-01" past shift is not returned

@@ -554,3 +554,81 @@ Feature: Patient Scheduling — Appointment Booking and Lifecycle
       When the front desk queries the TomorrowsCallList for "Main Office"
       Then no domain events are recorded
       And 2 entries are returned
+
+  # ─────────────────────────────────────────────────────────────
+  # PS-RULE-C6: Booking rejected when patient already has overlapping appointment
+  # SCH-4 ceremony — confirmed by Tony 2026-03-05
+  # C6 is practice-wide (not office-scoped): a patient cannot be in two chairs
+  # anywhere in the practice at the same time.
+  # ─────────────────────────────────────────────────────────────
+
+  Rule: Booking is rejected when the patient already has an overlapping appointment anywhere in the practice (C6)
+
+    Background:
+      And procedure "Filling" has default duration 45 minutes and is active
+      And provider "Dr. Thompson" is a Specialist available at "Main Office" Monday–Friday 09:00–16:00
+      And provider "Sarah Williams" is a Hygienist available at "Main Office" Monday–Friday 09:00–16:00
+
+    Scenario: Patient books a non-overlapping appointment at the same office — succeeds
+      Given patient "Maria Brown" has a Booked appointment at "Main Office" on 2026-03-09 from 10:00 to 11:00
+      When the front desk books an appointment for "Maria Brown" with "Dr. Spence" for "Cleaning" at "Main Office" on 2026-03-09 at 13:00
+      Then an AppointmentBooked event is recorded
+
+    Scenario: Booking rejected when patient already has an overlapping appointment at the same office
+      Given patient "Maria Brown" has a Booked appointment at "Main Office" on 2026-03-09 from 10:00 to 11:00
+      When the front desk attempts to book an appointment for "Maria Brown" with "Dr. Spence" for "Cleaning" at "Main Office" on 2026-03-09 at 10:30
+      Then no AppointmentBooked event is recorded
+      And an error is shown: "Patient Maria Brown already has an appointment at 10:00 — a patient cannot be in two chairs at the same time"
+
+    Scenario: Patient books an adjacent appointment — succeeds (not overlapping)
+      Given patient "Maria Brown" has a Booked appointment at "Main Office" on 2026-03-09 from 10:00 to 11:00
+      And no appointments at "Main Office" on 2026-03-09 between 11:00 and 12:00
+      When the front desk books an appointment for "Maria Brown" with "Dr. Spence" for "Cleaning" at "Main Office" on 2026-03-09 at 11:00
+      Then an AppointmentBooked event is recorded
+
+  # ─────────────────────────────────────────────────────────────
+  # PS-RULE-C7: Booking rejected when provider is not eligible for procedure
+  # SCH-4 ceremony — confirmed by Tony 2026-03-05
+  # Capability ladder: Specialist ≥ Dentist ≥ Hygienist
+  # No required_provider_type = any provider eligible (open access)
+  # ─────────────────────────────────────────────────────────────
+
+  Rule: Booking is rejected when the provider type is not eligible for the procedure's required level (C7)
+
+    Background:
+      And procedure "Root Canal" has default duration 90 minutes, requires Specialist, and is active
+      And procedure "Filling" has default duration 45 minutes, requires Dentist, and is active
+      And procedure "Cleaning" has default duration 60 minutes, requires Hygienist, and is active
+      And procedure "Consultation" has default duration 30 minutes, has no required provider type, and is active
+      And provider "Dr. Thompson" is a Specialist available at "Main Office" Monday–Friday 09:00–16:00
+      And provider "Sarah Williams" is a Hygienist available at "Main Office" Monday–Friday 09:00–16:00
+
+    Scenario: Specialist books a Specialist-required procedure — succeeds
+      Given no appointments at "Main Office" on 2026-03-09 between 10:00 and 11:30
+      When the front desk books an appointment for "Maria Brown" with "Dr. Thompson" for "Root Canal" at "Main Office" on 2026-03-09 at 10:00
+      Then an AppointmentBooked event is recorded
+
+    Scenario: Dentist books a Hygienist-required procedure — succeeds (capability ladder)
+      Given no appointments at "Main Office" on 2026-03-09 between 10:00 and 11:00
+      When the front desk books an appointment for "Maria Brown" with "Dr. Spence" for "Cleaning" at "Main Office" on 2026-03-09 at 10:00
+      Then an AppointmentBooked event is recorded
+
+    Scenario: Booking rejected when Dentist attempts to book a Specialist-required procedure
+      When the front desk attempts to book an appointment for "Maria Brown" with "Dr. Spence" for "Root Canal" at "Main Office" on 2026-03-09 at 10:00
+      Then no AppointmentBooked event is recorded
+      And an error is shown: "Root Canal requires a Specialist or higher. Dr. Spence is a Dentist and is not eligible for this procedure."
+
+    Scenario: Hygienist books a Hygienist-required procedure — succeeds
+      Given no appointments at "Main Office" on 2026-03-09 between 10:00 and 11:00
+      When the front desk books an appointment for "Maria Brown" with "Sarah Williams" for "Cleaning" at "Main Office" on 2026-03-09 at 10:00
+      Then an AppointmentBooked event is recorded
+
+    Scenario: Booking rejected when Hygienist attempts to book a Dentist-required procedure
+      When the front desk attempts to book an appointment for "Maria Brown" with "Sarah Williams" for "Filling" at "Main Office" on 2026-03-09 at 10:00
+      Then no AppointmentBooked event is recorded
+      And an error is shown: "Filling requires a Dentist or higher. Sarah Williams is a Hygienist and is not eligible for this procedure."
+
+    Scenario: Procedure with no required provider type — any provider type may book
+      Given no appointments at "Main Office" on 2026-03-09 between 10:00 and 10:30
+      When the front desk books an appointment for "Maria Brown" with "Sarah Williams" for "Consultation" at "Main Office" on 2026-03-09 at 10:00
+      Then an AppointmentBooked event is recorded
