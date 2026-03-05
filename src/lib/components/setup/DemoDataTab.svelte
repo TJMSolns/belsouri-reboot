@@ -1,6 +1,7 @@
 <script lang="ts">
   import { commands } from "$lib/bindings";
   import { toast } from "$lib/stores/toast";
+  import { confirm } from "$lib/stores/confirm";
 
   let seeding = $state(false);
   let archiving = $state(false);
@@ -14,24 +15,31 @@
     seeding = false;
     if (r.status === "ok") {
       toast.success(
-        `Demo data seeded: ${r.data.patients_created} patients, ${r.data.providers_created} providers, ${r.data.staff_created} staff members.`
+        `Sample records added: ${r.data.patients_created} patients, ${r.data.providers_created} providers, ${r.data.staff_created} staff members.`
       );
     } else {
-      seedError = r.error;
+      seedError = `Sample records could not be added — ${r.error}. Try restarting the app if this persists.`;
     }
   }
 
   async function doArchive() {
+    const ok = await confirm({
+      title: "Archive sample records?",
+      message: "This will archive all demo patients, providers, and staff (matched by role-as-last-name). Real records are not affected.",
+      confirmLabel: "Archive Sample Records",
+      destructive: true,
+    });
+    if (!ok) return;
     archiving = true;
     archiveError = null;
     const r = await commands.archiveDemoData();
     archiving = false;
     if (r.status === "ok") {
       toast.success(
-        `Demo data archived: ${r.data.patients_archived} patients, ${r.data.providers_archived} providers, ${r.data.staff_archived} staff members.`
+        `Sample records archived: ${r.data.patients_archived} patients, ${r.data.providers_archived} providers, ${r.data.staff_archived} staff members.`
       );
     } else {
-      archiveError = r.error;
+      archiveError = `Sample records could not be archived — ${r.error}. Try restarting the app if this persists.`;
     }
   }
 </script>
@@ -39,7 +47,7 @@
 <div class="demo-tab">
   <h2>Demo Data</h2>
   <p class="demo-desc">
-    Seed the practice with sample Caribbean names for testing and demonstration. All records use
+    Load sample Caribbean names into the practice for testing and demonstration. All records use
     role-as-last-name so they are easy to identify and remove.
   </p>
 
@@ -51,21 +59,21 @@
           <circle cx="12" cy="8" r="4"/>
           <path d="M6 20v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2"/>
         </svg>
-        <h3>Seed Demo Data</h3>
+        <h3>Add Sample Records</h3>
       </div>
       <ul class="demo-list">
         <li>10 patients — e.g. <em>Marcus Patient, Asha Patient</em></li>
         <li>6 providers — 2 Specialists, 2 Dentists, 2 Hygienists</li>
-        <li>2 staff members — e.g. <em>Andre Staff, Yolanda Staff</em></li>
+        <li>2 Staff members — e.g. <em>Andre Staff, Yolanda Staff</em></li>
       </ul>
       {#if seedError}
         <p class="field-error">{seedError}</p>
       {/if}
       <button class="btn-primary" onclick={doSeed} disabled={seeding || archiving}>
         {#if seeding}
-          <span class="spinner" aria-hidden="true"></span> Seeding…
+          <span class="spinner" aria-hidden="true"></span> Adding…
         {:else}
-          Seed Demo Data
+          Add Sample Records
         {/if}
       </button>
     </div>
