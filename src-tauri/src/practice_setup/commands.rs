@@ -64,6 +64,7 @@ fn procedure_type_to_dto(row: &ProcedureTypeRow) -> ProcedureTypeDto {
         category: row.category.clone(),
         default_duration_minutes: row.default_duration_minutes,
         is_active: row.is_active,
+        required_provider_type: row.required_provider_type.clone(),
     }
 }
 
@@ -998,4 +999,134 @@ pub async fn list_procedure_types(state: State<'_, AppState>) -> Result<Vec<Proc
     let proj = state.projections.lock().map_err(|e| e.to_string())?;
     let rows = proj.list_procedure_types().map_err(|e| e.to_string())?;
     Ok(rows.iter().map(procedure_type_to_dto).collect())
+}
+
+/// C7 helper: capability level for provider types.
+/// Specialist ≥ Dentist ≥ Hygienist; unknown types = 0.
+pub fn capability_level(t: &str) -> u8 {
+    match t {
+        "Specialist" => 3,
+        "Dentist" => 2,
+        "Hygienist" => 1,
+        _ => 0,
+    }
+}
+
+/// Validate that required_provider_type is one of the allowed values (or None).
+fn validate_required_provider_type(v: &str) -> Result<(), String> {
+    match v {
+        "Hygienist" | "Dentist" | "Specialist" => Ok(()),
+        _ => Err(format!(
+            "Required provider type '{}' is invalid. Must be 'Hygienist', 'Dentist', or 'Specialist'.",
+            v
+        )),
+    }
+}
+
+#[specta::specta]
+#[tauri::command]
+pub async fn set_procedure_type_capability(
+    state: State<'_, AppState>,
+    id: String,
+    required_provider_type: Option<String>,
+) -> Result<ProcedureTypeDto, String> {
+    // Validate value if provided
+    if let Some(ref v) = required_provider_type {
+        validate_required_provider_type(v)?;
+    }
+    // Find the procedure type, verify it exists and is active
+    do_rebuild(&state)?;
+    {
+        let proj = state.projections.lock().map_err(|e| e.to_string())?;
+        let row = proj.get_procedure_type(&id).map_err(|e| e.to_string())?
+            .ok_or_else(|| format!("Procedure type '{}' not found", id))?;
+        if !row.is_active {
+            return Err(format!("Procedure type '{}' is inactive and cannot be modified", id));
+        }
+    }
+    let stream_id = format!("procedure_type:{id}");
+    append_event(
+        &state,
+        &stream_id,
+        PROCEDURE_TYPE_CAPABILITY_SET,
+        &ProcedureTypeCapabilitySetPayload {
+            id: id.clone(),
+            required_provider_type,
+        },
+    )?;
+    do_rebuild(&state)?;
+    let proj = state.projections.lock().map_err(|e| e.to_string())?;
+    let row = proj.get_procedure_type(&id).map_err(|e| e.to_string())?.unwrap();
+    Ok(procedure_type_to_dto(&row))
+}
+
+#[cfg(test)]
+mod procedure_capability_tests {
+    use super::*;
+    use crate::db::{EventStore, ProjectionStore};
+    use crate::projections::practice_setup::rebuild;
+
+    fn stores() -> (EventStore, ProjectionStore) {
+        (EventStore::new_in_memory().unwrap(), ProjectionStore::new_in_memory().unwrap())
+    }
+
+    fn append_evt(es: &EventStore, stream_id: &str, event_type: &str, payload: serde_json::Value) {
+        let ver = es.current_version(stream_id).unwrap();
+        es.append(stream_id, ver, event_type, &payload.to_string()).unwrap();
+    }
+
+    /// Create a procedure type and return its id (using the event store directly, bypassing Tauri command layer)
+    fn setup_procedure(es: &EventStore, ps: &ProjectionStore, name: &str) -> String {
+        let id = uuid::Uuid::new_v4().to_string();
+        let stream_id = format!("procedure_type:{id}");
+        append_evt(es, &stream_id, PROCEDURE_TYPE_DEFINED, serde_json::json!({
+            "id": id,
+            "name": name,
+            "category": "Preventive",
+            "default_duration_minutes": 30
+        }));
+        rebuild(es, ps).unwrap();
+        id
+    }
+
+    #[test]
+    fn test_set_procedure_type_capability_sets_field() {
+        let (es, ps) = stores();
+        let id = setup_procedure(&es, &ps, "Root Canal");
+        let stream_id = format!("procedure_type:{id}");
+        append_evt(&es, &stream_id, PROCEDURE_TYPE_CAPABILITY_SET, serde_json::json!({
+            "id": id,
+            "required_provider_type": "Dentist"
+        }));
+        rebuild(&es, &ps).unwrap();
+        let row = ps.get_procedure_type(&id).unwrap().unwrap();
+        assert_eq!(row.required_provider_type, Some("Dentist".to_string()));
+    }
+
+    #[test]
+    fn test_set_procedure_type_capability_clears_field() {
+        let (es, ps) = stores();
+        let id = setup_procedure(&es, &ps, "Cleaning");
+        let stream_id = format!("procedure_type:{id}");
+        // Set first
+        append_evt(&es, &stream_id, PROCEDURE_TYPE_CAPABILITY_SET, serde_json::json!({
+            "id": id,
+            "required_provider_type": "Hygienist"
+        }));
+        rebuild(&es, &ps).unwrap();
+        // Then clear (set to null)
+        append_evt(&es, &stream_id, PROCEDURE_TYPE_CAPABILITY_SET, serde_json::json!({
+            "id": id,
+            "required_provider_type": null
+        }));
+        rebuild(&es, &ps).unwrap();
+        let row = ps.get_procedure_type(&id).unwrap().unwrap();
+        assert_eq!(row.required_provider_type, None);
+    }
+
+    #[test]
+    fn test_set_procedure_type_capability_rejects_invalid_type() {
+        let err = validate_required_provider_type("Nurse").unwrap_err();
+        assert!(err.contains("invalid"), "Expected 'invalid' in error: {}", err);
+    }
 }

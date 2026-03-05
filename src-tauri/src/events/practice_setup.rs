@@ -28,6 +28,7 @@ pub const PROCEDURE_TYPE_DEFINED: &str = "ProcedureTypeDefined";
 pub const PROCEDURE_TYPE_UPDATED: &str = "ProcedureTypeUpdated";
 pub const PROCEDURE_TYPE_DEACTIVATED: &str = "ProcedureTypeDeactivated";
 pub const PROCEDURE_TYPE_REACTIVATED: &str = "ProcedureTypeReactivated";
+pub const PROCEDURE_TYPE_CAPABILITY_SET: &str = "ProcedureTypeCapabilitySet";
 
 // ── Practice payloads ─────────────────────────────────────────────────────────
 
@@ -196,6 +197,13 @@ pub struct ProcedureTypeReactivatedPayload {
     pub id: String,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProcedureTypeCapabilitySetPayload {
+    pub id: String,
+    /// None | "Hygienist" | "Dentist" | "Specialist"
+    pub required_provider_type: Option<String>,
+}
+
 // ── All event types slice (used by projection rebuild) ────────────────────────
 
 pub const ALL_EVENT_TYPES: &[&str] = &[
@@ -222,4 +230,5 @@ pub const ALL_EVENT_TYPES: &[&str] = &[
     PROCEDURE_TYPE_UPDATED,
     PROCEDURE_TYPE_DEACTIVATED,
     PROCEDURE_TYPE_REACTIVATED,
+    PROCEDURE_TYPE_CAPABILITY_SET,
 ];

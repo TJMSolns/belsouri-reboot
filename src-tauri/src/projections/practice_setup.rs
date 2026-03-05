@@ -162,6 +162,7 @@ fn apply_event(proj: &ProjectionStore, event: &crate::db::StoredEvent) -> Result
                 category: p.category,
                 default_duration_minutes: p.default_duration_minutes,
                 is_active: true,
+                required_provider_type: None,
             }).map_err(|e| e.to_string())?;
         }
         PROCEDURE_TYPE_UPDATED => {
@@ -180,6 +181,11 @@ fn apply_event(proj: &ProjectionStore, event: &crate::db::StoredEvent) -> Result
         PROCEDURE_TYPE_REACTIVATED => {
             let p: ProcedureTypeReactivatedPayload = parse(&event.payload, PROCEDURE_TYPE_REACTIVATED)?;
             proj.set_procedure_type_active(&p.id, true).map_err(|e| e.to_string())?;
+        }
+        PROCEDURE_TYPE_CAPABILITY_SET => {
+            let p: ProcedureTypeCapabilitySetPayload = parse(&event.payload, PROCEDURE_TYPE_CAPABILITY_SET)?;
+            proj.set_procedure_type_required_provider_type(&p.id, p.required_provider_type.as_deref())
+                .map_err(|e| e.to_string())?;
         }
         _ => {} // unknown event types are ignored (forward compatibility)
     }

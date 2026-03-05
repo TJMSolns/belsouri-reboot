@@ -26,6 +26,7 @@ use practice_setup::commands::{
     define_procedure_type, update_procedure_type,
     deactivate_procedure_type, reactivate_procedure_type,
     seed_default_procedure_types, list_procedure_types,
+    set_procedure_type_capability,
 };
 use patient_management::commands::{
     register_patient, update_patient_demographics, update_patient_contact_info,
@@ -68,6 +69,7 @@ pub fn run() {
                 define_procedure_type, update_procedure_type,
                 deactivate_procedure_type, reactivate_procedure_type,
                 seed_default_procedure_types, list_procedure_types,
+                set_procedure_type_capability,
                 register_patient, update_patient_demographics, update_patient_contact_info,
                 add_patient_note, archive_patient, unarchive_patient, search_patients, get_patient,
                 claim_practice_manager_role, register_staff_member, assign_role, remove_role,
@@ -125,6 +127,7 @@ pub fn run() {
             define_procedure_type, update_procedure_type,
             deactivate_procedure_type, reactivate_procedure_type,
             seed_default_procedure_types, list_procedure_types,
+            set_procedure_type_capability,
             register_patient, update_patient_demographics, update_patient_contact_info,
             add_patient_note, archive_patient, unarchive_patient, search_patients, get_patient,
             claim_practice_manager_role, register_staff_member, assign_role, remove_role,

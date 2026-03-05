@@ -68,4 +68,5 @@ pub struct ProcedureTypeDto {
     pub category: String,
     pub default_duration_minutes: u32,
     pub is_active: bool,
+    pub required_provider_type: Option<String>,
 }

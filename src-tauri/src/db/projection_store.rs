@@ -99,6 +99,7 @@ pub struct ProcedureTypeRow {
     pub category: String,
     pub default_duration_minutes: u32,
     pub is_active: bool,
+    pub required_provider_type: Option<String>,
 }
 
 // ── Staff Management row types ────────────────────────────────────────────────
@@ -296,7 +297,8 @@ impl ProjectionStore {
                 name TEXT NOT NULL,
                 category TEXT NOT NULL,
                 default_duration_minutes INTEGER NOT NULL,
-                is_active INTEGER NOT NULL DEFAULT 1
+                is_active INTEGER NOT NULL DEFAULT 1,
+                required_provider_type TEXT
             );
             CREATE TABLE IF NOT EXISTS staff_members (
                 staff_member_id TEXT PRIMARY KEY,
@@ -383,6 +385,7 @@ impl ProjectionStore {
         let _ = self.conn.execute_batch("ALTER TABLE offices ADD COLUMN city_town TEXT;");
         let _ = self.conn.execute_batch("ALTER TABLE offices ADD COLUMN subdivision TEXT;");
         let _ = self.conn.execute_batch("ALTER TABLE offices ADD COLUMN country TEXT;");
+        let _ = self.conn.execute_batch("ALTER TABLE procedure_types ADD COLUMN required_provider_type TEXT;");
         Ok(())
     }
 
@@ -797,13 +800,13 @@ impl ProjectionStore {
 
     pub fn upsert_procedure_type(&self, row: &ProcedureTypeRow) -> Result<()> {
         self.conn.execute(
-            "INSERT INTO procedure_types (id, name, category, default_duration_minutes, is_active)
-             VALUES (?1, ?2, ?3, ?4, ?5)
+            "INSERT INTO procedure_types (id, name, category, default_duration_minutes, is_active, required_provider_type)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)
              ON CONFLICT(id) DO UPDATE SET
                  name = excluded.name, category = excluded.category,
                  default_duration_minutes = excluded.default_duration_minutes,
                  is_active = excluded.is_active",
-            params![row.id, row.name, row.category, row.default_duration_minutes, row.is_active as i32],
+            params![row.id, row.name, row.category, row.default_duration_minutes, row.is_active as i32, row.required_provider_type],
         )?;
         Ok(())
     }
@@ -834,9 +837,21 @@ impl ProjectionStore {
         Ok(())
     }
 
+    pub fn set_procedure_type_required_provider_type(
+        &self,
+        id: &str,
+        required_provider_type: Option<&str>,
+    ) -> Result<()> {
+        self.conn.execute(
+            "UPDATE procedure_types SET required_provider_type = ?2 WHERE id = ?1",
+            params![id, required_provider_type],
+        )?;
+        Ok(())
+    }
+
     pub fn get_procedure_type(&self, id: &str) -> Result<Option<ProcedureTypeRow>> {
         let r: SqlResult<ProcedureTypeRow> = self.conn.query_row(
-            "SELECT id, name, category, default_duration_minutes, is_active
+            "SELECT id, name, category, default_duration_minutes, is_active, required_provider_type
              FROM procedure_types WHERE id = ?1",
             params![id],
             |row| Ok(ProcedureTypeRow {
@@ -845,6 +860,7 @@ impl ProjectionStore {
                 category: row.get(2)?,
                 default_duration_minutes: row.get::<_, i64>(3)? as u32,
                 is_active: row.get::<_, i32>(4)? != 0,
+                required_provider_type: row.get(5)?,
             }),
         );
         match r {
@@ -856,7 +872,7 @@ impl ProjectionStore {
 
     pub fn list_procedure_types(&self) -> Result<Vec<ProcedureTypeRow>> {
         let mut stmt = self.conn.prepare(
-            "SELECT id, name, category, default_duration_minutes, is_active
+            "SELECT id, name, category, default_duration_minutes, is_active, required_provider_type
              FROM procedure_types ORDER BY name ASC"
         )?;
         let rows = stmt.query_map([], |row| Ok(ProcedureTypeRow {
@@ -865,6 +881,7 @@ impl ProjectionStore {
             category: row.get(2)?,
             default_duration_minutes: row.get::<_, i64>(3)? as u32,
             is_active: row.get::<_, i32>(4)? != 0,
+            required_provider_type: row.get(5)?,
         }))?.collect::<SqlResult<Vec<_>>>()?;
         Ok(rows)
     }
