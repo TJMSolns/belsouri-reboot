@@ -8,6 +8,7 @@ pub mod staff_management;
 pub mod staff_scheduling;
 pub mod appointments;
 pub mod projections;
+pub mod seed;
 
 use std::sync::Mutex;
 use tauri::Manager;
@@ -41,6 +42,7 @@ use appointments::commands::{
     mark_appointment_no_show, add_appointment_note, get_schedule, get_appointment,
     get_provider_schedule, get_tomorrows_call_list,
 };
+use seed::commands::{seed_demo_data, archive_demo_data};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -75,6 +77,7 @@ pub fn run() {
                 book_appointment, reschedule_appointment, cancel_appointment, complete_appointment,
                 mark_appointment_no_show, add_appointment_note, get_schedule, get_appointment,
                 get_provider_schedule, get_tomorrows_call_list,
+                seed_demo_data, archive_demo_data,
             ])
             .export(
                 Typescript::default().bigint(BigIntExportBehavior::Number),
@@ -131,6 +134,7 @@ pub fn run() {
             book_appointment, reschedule_appointment, cancel_appointment, complete_appointment,
             mark_appointment_no_show, add_appointment_note, get_schedule, get_appointment,
             get_provider_schedule, get_tomorrows_call_list,
+            seed_demo_data, archive_demo_data,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -3,8 +3,9 @@
   import OfficesTab from "$lib/components/setup/OfficesTab.svelte";
   import ProvidersTab from "$lib/components/setup/ProvidersTab.svelte";
   import ProcedureTypesTab from "$lib/components/setup/ProcedureTypesTab.svelte";
+  import DemoDataTab from "$lib/components/setup/DemoDataTab.svelte";
 
-  type Tab = "practice" | "offices" | "providers" | "procedures";
+  type Tab = "practice" | "offices" | "providers" | "procedures" | "demo";
   let activeTab = $state<Tab>("practice");
 
   const tabs: { id: Tab; label: string }[] = [
@@ -12,6 +13,7 @@
     { id: "offices", label: "Offices" },
     { id: "providers", label: "Providers" },
     { id: "procedures", label: "Procedure Types" },
+    { id: "demo", label: "Demo Data" },
   ];
 </script>
 
@@ -45,6 +47,8 @@
       <ProvidersTab />
     {:else if activeTab === "procedures"}
       <ProcedureTypesTab />
+    {:else if activeTab === "demo"}
+      <DemoDataTab />
     {/if}
   </div>
 </div>

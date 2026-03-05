@@ -586,6 +586,22 @@ async getTomorrowsCallList(officeId: string, date: string) : Promise<Result<Call
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
 }
+},
+async seedDemoData() : Promise<Result<SeedSummaryDto, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("seed_demo_data") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async archiveDemoData() : Promise<Result<ArchiveSummaryDto, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("archive_demo_data") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
 }
 }
 
@@ -602,6 +618,7 @@ async getTomorrowsCallList(officeId: string, date: string) : Promise<Result<Call
 export type AppointmentDto = { appointment_id: string; office_id: string; patient_id: string; patient_name: string; patient_phone: string | null; procedure_type_id: string; procedure_name: string; procedure_category: string; provider_id: string; provider_name: string; start_time: string; end_time: string; duration_minutes: number; status: string; rescheduled_to_id: string | null; rescheduled_from_id: string | null; booked_by: string }
 export type AppointmentNoteDto = { note_id: string; appointment_id: string; text: string; recorded_by: string; recorded_at: string }
 export type AppointmentWithNotesDto = { appointment: AppointmentDto; notes: AppointmentNoteDto[] }
+export type ArchiveSummaryDto = { patients_archived: number; providers_archived: number; staff_archived: number }
 export type AvailabilityExceptionDto = { start_date: string; end_date: string; reason: string | null }
 export type AvailabilityWindowDto = { office_id: string; day_of_week: string; start_time: string; end_time: string }
 export type BookAppointmentResult = { appointment_id: string }
@@ -634,6 +651,7 @@ export type ProviderScheduleEntry = { provider_id: string; provider_name: string
  */
 export type RegisterPatientResult = { patient: PatientDto; duplicate_warning: string | null }
 export type RescheduleAppointmentResult = { new_appointment_id: string }
+export type SeedSummaryDto = { patients_created: number; providers_created: number; staff_created: number }
 export type StaffMemberDto = { staff_member_id: string; name: string; phone: string | null; email: string | null; preferred_contact_channel: string | null; 
 /**
  * True if the staff member has a PIN set (PIN hash itself is never exposed).
