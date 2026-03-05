@@ -53,3 +53,26 @@ Living document. Updated continuously as we work.
 4. CI enforces `pnpm check:ipc` on every push.
 
 **Governance**: ADR-001 updated. `pnpm check:ipc` added to CI and done-checker. `scripts/check-ipc.mjs` is the enforcement mechanism.
+
+---
+
+### 2026-03-05: Parallel Agent Workflow, Watchdog Skills, and Documentation Drift
+
+**What happened**: Sprint delivered SCH-4 (provider capability), SCH-5 (shift planning), SCH-7 (setup checklist), CI pipelines, and SCH-4b ceremonies — five parallel workstreams. Then a watchdog pass (ux-review + copy-check + icon-audit) ran against all changed Svelte files. Root-level MD files (README, STATUS, TODO) were found to be severely out of date — README was still the Tauri scaffold template, STATUS referenced 102 tests and belsouri-old phase names, TODO still contained pre-development ceremony scaffolding from 2026-02-06.
+
+**What we learned**:
+
+1. **Parallel background agents in isolated git worktrees work at scale.** Five independent agents ran simultaneously (SCH-4, SCH-5, SCH-7, CI, SCH-4b ceremonies), each in its own worktree. All five merged to main with zero conflicts. Prerequisites for clean merges: each agent must own distinct files, no agent edits `lib.rs` or `bindings.ts` while another does, and worktrees are branched from the same HEAD commit.
+
+2. **Watchdog skills catch real issues that code review misses.** In the Phase 3 polish pass, ux-review flagged touch targets below 44px on mobile breakpoints, copy-check found raw Rust error strings surfaced directly to users (violates POL-003), icon-audit found hover-only affordances that are invisible on touch screens, and missing loading guards on async actions. None of these are caught by `pnpm check` or `cargo test`. The watchdog pass is not optional ceremony — it finds genuine UX defects.
+
+3. **Root MD files drift without an explicit maintenance step.** README, STATUS, and TODO do not self-update. They drifted across the entire Track A + MVP build period (roughly 3 weeks) because no process required updating them. Fix: add "update root MD files" as a line item in the post-sprint checklist, same weight as running `pnpm check`.
+
+4. **`bindings.ts` must be updated manually when `pnpm tauri dev` cannot run** (e.g., display-less CI environments, or when adding commands in a background worktree). Pattern: find an existing command entry in `bindings.ts` that has a similar signature, copy its structure exactly, change the command name and parameter types, and verify it compiles with `pnpm check` before merging. Do not hand-write from scratch — match the tauri-specta output format precisely.
+
+**What we'll do differently**:
+- Post-sprint checklist includes: update STATUS.md test count, update TODO.md active items, scan README for stale content.
+- Watchdog skills run in the main thread after every push (not as background agents — Skills require user-approved permissions).
+- When spawning parallel agents, pre-assign file ownership to prevent merge conflicts on shared files.
+
+**Governance**: No new ADR — these are process refinements, not architectural decisions.

@@ -1,153 +1,73 @@
 # Project Status: Belsouri Dental Practice Management
 
-**Last Updated**: 2026-02-12
-**Current Phase**: 4.3 (Living Documentation Sync)
-**Current Increment**: Scheduling (Increment 4 - Appointment Booking with Constraints)
+**Last Updated**: 2026-03-05
+**Current Phase**: Post-MVP — SCH-4b in progress
 
 ---
 
-## Phase Completion
+## MVP Bounded Contexts
 
-| Phase | Status | Description |
-|-------|--------|-------------|
-| Phase 0 | COMPLETE | Program Initiation (CHARTER, HOW-WE-WORK) |
-| Phase 1 | COMPLETE | Event Storming, Context Mapping |
-| Phase 2 | COMPLETE | Three Amigos, BDD Scenarios |
-| Phase 3 | COMPLETE | Test-First, Red-Green-Refactor, Property Testing |
-| Phase 4.1 | COMPLETE | Scenario-to-Test Decomposition |
-| Phase 4.2 | COMPLETE | Domain Model Retrospective |
-| Phase 4.3 | IN PROGRESS | Living Documentation Sync |
-| Phase 4.4 | PENDING | Cross-Boundary Integration Testing |
+All 6 MVP bounded contexts are shipped and merged to main.
 
----
-
-## Bounded Contexts Status
-
-| Context | Status | Aggregates | Tests | Notes |
-|---------|--------|------------|-------|-------|
-| **Scheduling** | COMPLETE | 5 | 102 | Office, Provider, Patient, ProcedureType, Appointment |
-| Core Platform | IN PROGRESS | 2 | - | Staff, EventStore |
-| Recall & Outreach | PLANNED | 3 | - | RecallRule, Campaign, WorkQueueItem |
-| Payments | PLANNED | TBD | - | Future Phase 1 |
-| Charting | PLANNED | TBD | - | Future Phase 2 |
+| Context | Status | Notes |
+|---------|--------|-------|
+| Licensing | COMPLETE | Machine-bound Ed25519, startup check, 90-day grace |
+| Practice Setup | COMPLETE | Practice details, offices, providers, procedure types, setup checklist |
+| Patient Management | COMPLETE | Register, demographics, search, archive/unarchive, notes |
+| Staff Management | COMPLETE | PM role claim, register staff, roles, PIN auth, archive |
+| Staff Scheduling | COMPLETE | Provider availability queries, office provider roster, shift planning |
+| Appointments | COMPLETE | Book (7 constraints), reschedule, cancel, complete, no-show, schedule grid, call list |
 
 ---
 
 ## Metrics
 
-### Test Coverage (Scheduling Context)
-
-| Metric | Value | Target | Status |
-|--------|-------|--------|--------|
-| Total Tests | 102 | >=85 | PASS |
-| BDD Scenario Tests | 17 | 100% scenarios | PASS |
-| Integration Tests | 5 | >=3 per feature | PASS |
-| Property/Boundary Tests | ~15 | Key invariants | PASS |
-| Build Status | Passing | - | PASS |
-| Clippy (lints) | 0 warnings | 0 | PASS |
-
-### Domain Model Quality
-
-| Check | Status | Evidence |
-|-------|--------|----------|
-| Aggregates correctly sized | PASS | 5 aggregates, 1-3 entities each |
-| Invariants enforced | PASS | 7 booking constraints validated |
-| Commands return Events | PASS | Event sourcing pattern |
-| Events capture state changes | PASS | 9+ event types per aggregate |
-| Repositories clean | PASS | EventStore append-only |
-| Value objects immutable | PASS | Enums for status, categories |
-| Boundaries clear | PASS | Scheduling separate from Platform |
+| Metric | Value |
+|--------|-------|
+| Cargo tests passing | 171 |
+| TypeScript errors | 0 |
+| TypeScript warnings | 0 |
+| Clippy warnings | 0 |
 
 ---
 
-## Artifacts
+## CI
 
-### Required Documentation
-
-| Artifact | Status | Path |
-|----------|--------|------|
-| CHARTER.md | EXISTS | /CHARTER.md |
-| ARCHITECTURE.md | EXISTS | /ARCHITECTURE.md |
-| HOW-WE-WORK.md | EXISTS | /HOW-WE-WORK.md |
-| Ubiquitous Language | EXISTS | doc/internal/domain/ubiquitous-language.md |
-| Context Map | EXISTS | doc/internal/domain/context-maps/context-map.md |
-| Aggregates | EXISTS | doc/internal/domain/aggregates/*.md |
-| BDD Scenarios | EXISTS | features/*.feature (4 files) |
-| Example Maps | EXISTS | doc/internal/scenarios/example-maps/*.md (4 files) |
-| Retrospective | EXISTS | doc/internal/governance/retrospectives/Phase4.2-scheduling-retrospective.md |
-
-### Implementation
-
-| Module | Status | Path |
-|--------|--------|------|
-| Event Store | COMPLETE | src-tauri/src/store/mod.rs |
-| Projections | COMPLETE | src-tauri/src/projections/*.rs |
-| Scheduling Domain | COMPLETE | src-tauri/src/modules/scheduling/*.rs |
-| Tauri Commands | COMPLETE | src-tauri/src/commands/scheduling.rs |
+| Workflow | Trigger | Status |
+|----------|---------|--------|
+| `ci.yml` | Push / PR to main | Tests + check + clippy |
+| `build.yml` | Tag push (`v*`) | Matrix release build (Windows, macOS, Linux) |
 
 ---
 
-## Booking Constraints (7 Rules)
+## Features Shipped (Post-MVP Sprint)
 
-All constraints are validated by `BookingValidator`:
-
-1. **Office must be open** - Checks office_hours projection
-2. **Provider must be assigned** - Checks provider_office_assignments
-3. **Provider must be available** - Checks provider_availability projection
-4. **Provider not on vacation** - Checks provider_exceptions projection
-5. **No double-booking** - Checks appointments projection for overlap
-6. **Chair capacity** - Checks concurrent appointments <= office.chair_count
-7. **Valid duration** - 15-240 minutes enforced
+| Feature | Description |
+|---------|-------------|
+| SCH-4 | `required_provider_type` on procedure types; C7 capability check in booking |
+| SCH-5 | Shift planning and weekly roster view |
+| SCH-7 | Setup checklist onboarding panel |
+| Demo data | Seed/archive sample records |
 
 ---
 
-## Appointment Status Flow
+## Current Work
 
-```
-Booked -> Confirmed -> Arrived -> InProgress -> Completed
-   |          |           |
-   v          v           v
-Cancelled  Cancelled   NoShow
-
-Terminal states: Completed, Cancelled, NoShow, Rescheduled
-```
+**SCH-4b — PM Booking Override**: Practice Manager soft-stop override for C1/C2 constraint violations. Ceremonies complete (Three Amigos, Example Mapping, BDD scenarios). Implementation starting.
 
 ---
 
-## Known Issues (from Retrospective)
+## Post-MVP Backlog
 
-| Issue | Severity | Status | Fix |
-|-------|----------|--------|-----|
-| AppointmentStatus duplicate definition | Minor | Acknowledged | Consider single source |
-| String-based datetime | Minor | Acknowledged | Consider chrono::DateTime |
-| Missing user_id in events | Minor | Acknowledged | Add audit trail |
-| Projection rebuild from scratch | Acceptable | Tracked | Optimize at scale |
-
----
-
-## Next Steps
-
-1. [ ] Complete Phase 4.3 - Living Documentation Sync
-2. [ ] Complete Phase 4.4 - Cross-Boundary Integration Testing
-3. [ ] Begin Increment 5 - Scheduling UI (Svelte frontend)
-4. [ ] Begin Recall & Outreach context (Increment 6)
-
----
-
-## Release Readiness
-
-| Gate | Status | Notes |
-|------|--------|-------|
-| All tests passing | PASS | 102 tests |
-| Clippy clean | PASS | -D warnings |
-| Documentation complete | PASS | All artifacts exist |
-| Event sourcing verified | PASS | Commands return events |
-| Retrospective complete | PASS | Phase 4.2 documented |
-| Integration tests | PASS | 5 full-flow tests |
-
-**Overall**: Ready for Phase 4.4 and UI development
+| Item | Description |
+|------|-------------|
+| SCH-6 | Role-based view switching — Phase 1 ceremonies required before implementation |
+| PDR-004 | Outcome-based RBAC — post-MVP concept captured, not scheduled |
+| Recall & Outreach | New bounded context — full Phase 1 ceremonies required |
+| Payments | Future phase |
+| Charting | Future phase |
 
 ---
 
 **Maintained By**: Tony + Claude
-**Review Frequency**: End of each phase
+**Review Frequency**: End of each sprint

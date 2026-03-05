@@ -595,22 +595,6 @@ async getTomorrowsCallList(officeId: string, date: string) : Promise<Result<Call
     else return { status: "error", error: e  as any };
 }
 },
-async seedDemoData() : Promise<Result<SeedSummaryDto, string>> {
-    try {
-    return { status: "ok", data: await TAURI_INVOKE("seed_demo_data") };
-} catch (e) {
-    if(e instanceof Error) throw e;
-    else return { status: "error", error: e  as any };
-}
-},
-async archiveDemoData() : Promise<Result<ArchiveSummaryDto, string>> {
-    try {
-    return { status: "ok", data: await TAURI_INVOKE("archive_demo_data") };
-} catch (e) {
-    if(e instanceof Error) throw e;
-    else return { status: "error", error: e  as any };
-}
-},
 async planStaffShift(staffMemberId: string, officeId: string, date: string, startTime: string, endTime: string, role: string, createdBy: string) : Promise<Result<PlanShiftResult, string>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("plan_staff_shift", { staffMemberId, officeId, date, startTime, endTime, role, createdBy }) };
@@ -630,6 +614,22 @@ async cancelStaffShift(shiftId: string, cancelReason: string | null, cancelledBy
 async getShiftRoster(weekStartDate: string, officeId: string | null) : Promise<Result<StaffShiftDto[], string>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("get_shift_roster", { weekStartDate, officeId }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async seedDemoData() : Promise<Result<SeedSummaryDto, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("seed_demo_data") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async archiveDemoData() : Promise<Result<ArchiveSummaryDto, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("archive_demo_data") };
 } catch (e) {
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
@@ -672,6 +672,7 @@ export type PatientNoteDto = { note_id: string; patient_id: string; text: string
  * Returned from get_patient — includes the patient plus their notes.
  */
 export type PatientWithNotesDto = { patient: PatientDto; notes: PatientNoteDto[] }
+export type PlanShiftResult = { shift_id: string }
 export type PracticeDto = { name: string; phone: string | null; email: string | null; website: string | null; address_line_1: string | null; address_line_2: string | null; city_town: string | null; subdivision: string | null; country: string | null }
 export type ProcedureTypeDto = { id: string; name: string; category: string; default_duration_minutes: number; is_active: boolean; required_provider_type: string | null }
 export type ProviderAvailabilityResult = { available: boolean; reason: string | null }
@@ -684,7 +685,7 @@ export type ProviderScheduleEntry = { provider_id: string; provider_name: string
 export type RegisterPatientResult = { patient: PatientDto; duplicate_warning: string | null }
 export type RescheduleAppointmentResult = { new_appointment_id: string }
 export type SeedSummaryDto = { patients_created: number; providers_created: number; staff_created: number }
-export type StaffMemberDto = { staff_member_id: string; name: string; phone: string | null; email: string | null; preferred_contact_channel: string | null;
+export type StaffMemberDto = { staff_member_id: string; name: string; phone: string | null; email: string | null; preferred_contact_channel: string | null; 
 /**
  * True if the staff member has a PIN set (PIN hash itself is never exposed).
  */
@@ -695,7 +696,6 @@ has_pin: boolean; roles: string[]; archived: boolean }
  */
 export type StaffSetupStatusDto = { complete: boolean }
 export type StaffShiftDto = { shift_id: string; staff_member_id: string; staff_name: string; office_id: string; office_name: string; date: string; start_time: string; end_time: string; role: string; created_by: string; cancelled: boolean; cancel_reason: string | null }
-export type PlanShiftResult = { shift_id: string }
 
 /** tauri-specta globals **/
 

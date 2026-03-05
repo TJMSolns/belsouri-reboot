@@ -41,7 +41,9 @@
   let editDuration = $state(30);
   let editReqType = $state("");
   let editError = $state<string | null>(null);
+  let saving = $state(false);
   let savingCapability = $state(false);
+  let togglingId = $state<string | null>(null);
 
   onMount(load);
 
@@ -62,7 +64,7 @@
     if (r.status === "ok") {
       types = r.data;
       toast.success("Default procedure types added.");
-    } else { error = r.error; }
+    } else { error = getErrorMessage(r.error); }
   }
 
   async function define() {
@@ -72,8 +74,9 @@
     defining = false;
     if (r.status === "ok") {
       types = [...types, r.data].sort((a, b) => a.name.localeCompare(b.name));
+      toast.success(`"${r.data.name}" defined.`);
       newName = ""; newDuration = 30; showDefine = false;
-    } else { defineError = r.error; }
+    } else { defineError = getErrorMessage(r.error); }
   }
 
   function startEdit(pt: ProcedureTypeDto) {
@@ -87,13 +90,15 @@
 
   async function saveEdit(id: string) {
     editError = null;
+    saving = true;
     const r = await commands.updateProcedureType(id, editName.trim() || null, editCategory, editDuration);
-    if (r.status !== "ok") { editError = r.error; return; }
+    if (r.status !== "ok") { saving = false; editError = getErrorMessage(r.error); return; }
 
-    // Save capability (only if changed)
+    // Save capability
     savingCapability = true;
     const capRes = await commands.setProcedureTypeCapability(id, editReqType || null);
     savingCapability = false;
+    saving = false;
     if (capRes.status !== "ok") { editError = getErrorMessage(capRes.error); return; }
 
     types = types.map((t) => t.id === id ? capRes.data : t);
@@ -102,9 +107,11 @@
   }
 
   async function toggleActive(pt: ProcedureTypeDto) {
+    togglingId = pt.id;
     const r = pt.is_active
       ? await commands.deactivateProcedureType(pt.id)
       : await commands.reactivateProcedureType(pt.id);
+    togglingId = null;
     if (r.status === "ok") {
       types = types.map((t) => t.id === pt.id ? r.data : t);
       toast.success(`"${r.data.name}" ${r.data.is_active ? "reactivated" : "deactivated"}.`);
@@ -180,13 +187,24 @@
         <div class="type-row">
           {#if editingId === pt.id}
             <div class="edit-row">
-              {#if editError}<p class="error">{editError}</p>{/if}
-              <input bind:value={editName} placeholder="Name" style="flex:1" />
-              <select bind:value={editCategory}>
-                {#each CATEGORIES as c}<option>{c}</option>{/each}
-              </select>
-              <input type="number" min="15" max="240" bind:value={editDuration} style="width:80px" />
-              <span class="duration-label">min</span>
+              {#if editError}<p class="error edit-row-error">{editError}</p>{/if}
+              <div class="req-type-field" style="flex:1; min-width:120px">
+                <label class="field-label" for="edit-name-{pt.id}">Name</label>
+                <input id="edit-name-{pt.id}" bind:value={editName} placeholder="e.g. Root Canal" />
+              </div>
+              <div class="req-type-field">
+                <label class="field-label" for="edit-cat-{pt.id}">Category</label>
+                <select id="edit-cat-{pt.id}" bind:value={editCategory}>
+                  {#each CATEGORIES as c}<option>{c}</option>{/each}
+                </select>
+              </div>
+              <div class="req-type-field">
+                <label class="field-label" for="edit-dur-{pt.id}">Duration</label>
+                <div class="dur-input-row">
+                  <input id="edit-dur-{pt.id}" type="number" min="15" max="240" bind:value={editDuration} style="width:70px" />
+                  <span class="duration-label">min</span>
+                </div>
+              </div>
               <div class="req-type-field">
                 <label class="field-label" for="req-type-{pt.id}">Required provider type</label>
                 <select id="req-type-{pt.id}" bind:value={editReqType}>
@@ -195,10 +213,12 @@
                   {/each}
                 </select>
               </div>
-              <button class="btn-sm" onclick={() => saveEdit(pt.id)} disabled={savingCapability}>
-                {#if savingCapability}<span class="spinner" aria-hidden="true"></span><span class="sr-only">Saving</span>{:else}Save{/if}
-              </button>
-              <button class="btn-sm btn-ghost" onclick={() => (editingId = null)}>Cancel</button>
+              <div class="edit-row-actions">
+                <button class="btn-sm" onclick={() => saveEdit(pt.id)} disabled={saving}>
+                  {#if saving}<span class="spinner" aria-hidden="true"></span><span class="sr-only">Saving</span>{:else}Save{/if}
+                </button>
+                <button class="btn-sm btn-ghost" onclick={() => (editingId = null)}>Cancel</button>
+              </div>
             </div>
           {:else}
             <div class="type-info">
@@ -208,17 +228,19 @@
               <span class="meta">{pt.default_duration_minutes} min</span>
               {#if pt.required_provider_type}
                 <span class="badge req-badge" title="Required provider type">
-                  <svg viewBox="0 0 16 16" width="11" height="11" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
-                    <circle cx="8" cy="6" r="3"/>
-                    <path d="M2 14c0-3.3 2.7-6 6-6s6 2.7 6 6"/>
+                  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <circle cx="12" cy="8" r="4"/>
+                    <path d="M4 20c0-4.4 3.6-8 8-8s8 3.6 8 8"/>
                   </svg>
                   {reqTypeLabel(pt.required_provider_type)}
                 </span>
               {/if}
             </div>
             <div class="type-actions">
-              <button class="btn-sm btn-ghost" onclick={() => startEdit(pt)}>Edit</button>
-              <button class="btn-sm btn-ghost" onclick={() => toggleActive(pt)}>Deactivate</button>
+              <button class="btn-sm btn-ghost" onclick={() => startEdit(pt)} disabled={togglingId === pt.id}>Edit</button>
+              <button class="btn-sm btn-ghost" onclick={() => toggleActive(pt)} disabled={togglingId === pt.id}>
+                {#if togglingId === pt.id}<span class="spinner" aria-hidden="true"></span><span class="sr-only">Deactivating</span>{:else}Deactivate{/if}
+              </button>
             </div>
           {/if}
         </div>
@@ -239,7 +261,9 @@
               <span class="meta">{pt.default_duration_minutes} min</span>
             </div>
             <div class="type-actions">
-              <button class="btn-sm btn-ghost" onclick={() => toggleActive(pt)}>Reactivate</button>
+              <button class="btn-sm btn-ghost" onclick={() => toggleActive(pt)} disabled={togglingId === pt.id}>
+                {#if togglingId === pt.id}<span class="spinner" aria-hidden="true"></span><span class="sr-only">Reactivating</span>{:else}Reactivate{/if}
+              </button>
             </div>
           </div>
         {/each}
@@ -285,7 +309,10 @@
   .badge { font-size: var(--text-xs); padding: 2px var(--space-2); border-radius: var(--radius-full); font-weight: 600; font-family: var(--font-body); }
   .type-actions { display: flex; gap: var(--space-1); }
 
-  .edit-row { display: flex; align-items: center; gap: var(--space-2); flex: 1; flex-wrap: wrap; }
+  .edit-row { display: flex; align-items: flex-end; gap: var(--space-2); flex: 1; flex-wrap: wrap; }
+  .edit-row-error { flex-basis: 100%; margin: 0; }
+  .edit-row-actions { display: flex; align-items: center; gap: var(--space-1); padding-bottom: 2px; }
+  .dur-input-row { display: flex; align-items: center; gap: var(--space-1); }
   .edit-row input { padding: var(--space-1) var(--space-2); border: 1px solid var(--pearl-mist-dk); border-radius: var(--radius-sm); font-size: var(--text-sm); font-family: var(--font-body); }
   .edit-row select { padding: var(--space-1) var(--space-2); border: 1px solid var(--pearl-mist-dk); border-radius: var(--radius-sm); font-size: var(--text-sm); font-family: var(--font-body); background: white; }
   .duration-label { font-size: var(--text-xs); color: var(--slate-fog); font-family: var(--font-body); }
@@ -295,7 +322,7 @@
   .inactive-section { margin-top: var(--space-4); }
 
   .btn-primary {
-    display: inline-flex; align-items: center; min-height: 36px; padding: 0 var(--space-4);
+    display: inline-flex; align-items: center; min-height: 44px; padding: 0 var(--space-4);
     background: var(--caribbean-teal); color: #fff; border: none;
     border-radius: var(--radius-md); font-family: var(--font-heading); font-size: var(--text-sm);
     font-weight: 600; cursor: pointer; transition: background var(--transition-fast);
@@ -303,7 +330,7 @@
   .btn-primary:hover:not(:disabled) { background: var(--caribbean-teal-dk); }
   .btn-primary:disabled { opacity: 0.45; cursor: not-allowed; }
   .btn-secondary {
-    display: inline-flex; align-items: center; min-height: 36px; padding: 0 var(--space-4);
+    display: inline-flex; align-items: center; min-height: 44px; padding: 0 var(--space-4);
     background: white; color: var(--abyss-navy);
     border: 1px solid var(--pearl-mist-dk); border-radius: var(--radius-md);
     font-family: var(--font-heading); font-size: var(--text-sm); font-weight: 600; cursor: pointer;
@@ -312,7 +339,7 @@
   .btn-secondary:hover:not(:disabled) { background: var(--pearl-mist); border-color: var(--slate-fog); }
   .btn-secondary:disabled { opacity: 0.45; cursor: not-allowed; }
   .btn-sm {
-    display: inline-flex; align-items: center; min-height: 28px; padding: 0 var(--space-3);
+    display: inline-flex; align-items: center; min-height: 44px; padding: 0 var(--space-3);
     background: var(--caribbean-teal); color: white; border: none;
     border-radius: var(--radius-sm); font-size: var(--text-xs); font-family: var(--font-body); font-weight: 600; cursor: pointer;
     transition: background var(--transition-fast);

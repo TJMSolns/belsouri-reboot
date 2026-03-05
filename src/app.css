@@ -240,6 +240,11 @@ label.field-label {
   color: var(--abyss-navy);
 }
 
+.required-star {
+  color: var(--healthy-coral);
+  margin-left: 2px;
+}
+
 input[type="text"],
 input[type="email"],
 input[type="tel"],

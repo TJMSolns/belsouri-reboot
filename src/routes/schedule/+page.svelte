@@ -366,7 +366,7 @@
     if (res.status === "ok") {
       showPlanShift = false;
       const staffName = staffMember?.name ?? "Staff member";
-      toast.success(`Shift planned for ${staffName} on ${formatDisplayDate(planShiftDate)} (${planShiftStart}–${planShiftEnd}).`);
+      toast.success(`Shift planned for ${staffName} on ${formatDisplayDate(planShiftDate)} (${minsTo12h(parseHHMM(planShiftStart))}–${minsTo12h(parseHHMM(planShiftEnd))}).`);
       await loadRoster();
     } else {
       planShiftError = getErrorMessage(res.error);
@@ -376,7 +376,7 @@
   async function doCancelShift(shift: StaffShiftDto) {
     const ok = await confirm({
       title: "Cancel shift",
-      message: `Cancel ${shift.staff_name}'s shift on ${formatDisplayDate(shift.date)} (${shift.start_time}–${shift.end_time})?`,
+      message: `Cancel ${shift.staff_name}'s shift on ${formatDisplayDate(shift.date)} (${minsTo12h(parseHHMM(shift.start_time))}–${minsTo12h(parseHHMM(shift.end_time))})?`,
       confirmLabel: "Cancel shift",
       destructive: true,
     });
@@ -573,7 +573,7 @@
     const res = await commands.addAppointmentNote(detailApptId, noteText, STAFF_ID);
     noteLoading = false;
     if (res.status === "ok") {
-      toast.success("Note added.");
+      toast.success(`Note added for ${detailData?.appointment.patient_name ?? "this appointment"}.`);
       noteText = "";
       const dr = await commands.getAppointment(detailApptId);
       if (dr.status === "ok") detailData = dr.data;
@@ -637,6 +637,7 @@
 
   function onKeydown(e: KeyboardEvent) {
     if (e.key === "Escape") {
+      if (showPlanShift) { showPlanShift = false; return; }
       if (showBookForm) { showBookForm = false; return; }
       if (detailApptId) { closeDetail(); return; }
     }
@@ -675,12 +676,14 @@
     if (scheduleView === "roster" && selectedDate) loadRoster();
   });
 
-  // Pre-fill planShiftRole when staff changes
+  // Pre-fill planShiftRole when staff changes — only reset if current role is not valid
   $effect(() => {
     if (planShiftStaffId) {
       const s = allStaff.find((m) => m.staff_member_id === planShiftStaffId);
-      if (s && s.roles.length > 0) {
+      if (s && s.roles.length > 0 && !s.roles.includes(planShiftRole)) {
         planShiftRole = s.roles[0];
+      } else if (!s || s.roles.length === 0) {
+        planShiftRole = "";
       }
     }
   });
@@ -732,7 +735,7 @@
         {:else if eligibleBookRoster.length === 0 && bookProcedureId}
           {@const proc = procedures.find((p) => p.id === bookProcedureId)}
           <div class="field-error" role="alert">
-            <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true" style="flex-shrink:0"><circle cx="8" cy="8" r="6"/><line x1="8" y1="5" x2="8" y2="8"/><line x1="8" y1="11" x2="8" y2="11.5" stroke-width="2"/></svg>
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex-shrink:0"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
             No eligible providers for {proc?.name ?? "this procedure"} on {formatDisplayDate(bookStartDate)}.
             {proc?.required_provider_type ? `${proc.name} requires a ${proc.required_provider_type} or higher.` : ""}
             Try a different day or procedure.
@@ -746,7 +749,7 @@
                 onclick={() => onBookProviderChange(entry.provider_id)}
               >
                 <span class="chip-name">{entry.provider_name}</span>
-                <span class="chip-hours">{entry.start_time}–{entry.end_time}</span>
+                <span class="chip-hours">{minsTo12h(parseHHMM(entry.start_time))}–{minsTo12h(parseHHMM(entry.end_time))}</span>
               </button>
             {/each}
           </div>
@@ -941,7 +944,7 @@
                     onclick={() => { reschedProviderId = entry.provider_id; reschedTime = generateTimeSlots(entry.start_time, entry.end_time)[0] ?? ""; }}
                   >
                     <span class="chip-name">{entry.provider_name}</span>
-                    <span class="chip-hours">{entry.start_time}–{entry.end_time}</span>
+                    <span class="chip-hours">{minsTo12h(parseHHMM(entry.start_time))}–{minsTo12h(parseHHMM(entry.end_time))}</span>
                   </button>
                 {/each}
               </div>
@@ -1011,7 +1014,7 @@
           </div>
         </div>
       {:else}
-        <p class="text-muted">Appointment not found.</p>
+        <p class="text-muted">Appointment not found. Close and try again.</p>
       {/if}
     </div>
   </div>
@@ -1035,7 +1038,7 @@
           aria-selected={scheduleView === "grid"}
           onclick={() => (scheduleView = "grid")}
         >
-          <svg viewBox="0 0 24 24" stroke-width="1.75" stroke="currentColor" fill="none" aria-hidden="true" class="icon-sm"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+          <svg viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" stroke="currentColor" fill="none" aria-hidden="true" class="icon-sm"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
           Schedule
         </button>
         <button
@@ -1045,7 +1048,7 @@
           aria-selected={scheduleView === "roster"}
           onclick={() => (scheduleView = "roster")}
         >
-          <svg viewBox="0 0 24 24" stroke-width="1.75" stroke="currentColor" fill="none" aria-hidden="true" class="icon-sm"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+          <svg viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" stroke="currentColor" fill="none" aria-hidden="true" class="icon-sm"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
           Roster
         </button>
       </div>
@@ -1098,13 +1101,13 @@
         <div class="drawer-header">
           <h2 class="drawer-title" id="plan-shift-title">Plan shift</h2>
           <button class="btn btn-ghost btn-icon btn-sm" onclick={() => (showPlanShift = false)} aria-label="Close plan shift form">
-            <svg viewBox="0 0 24 24" stroke-width="1.75" stroke="currentColor" fill="none" aria-hidden="true" class="icon-sm"><path d="M18 6 6 18M6 6l12 12"/></svg>
+            <svg viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" stroke="currentColor" fill="none" aria-hidden="true" class="icon-sm"><path d="M18 6 6 18M6 6l12 12"/></svg>
           </button>
         </div>
         <div class="drawer-body">
           <div class="form-field">
-            <label class="field-label" for="ps-staff">Staff member</label>
-            <select id="ps-staff" bind:value={planShiftStaffId} onchange={() => { const s = allStaff.find(m => m.staff_member_id === planShiftStaffId); if (s && s.roles.length > 0) planShiftRole = s.roles[0]; else planShiftRole = ""; }}>
+            <label class="field-label" for="ps-staff">Staff member <span class="required-star" aria-hidden="true">*</span></label>
+            <select id="ps-staff" bind:value={planShiftStaffId} onchange={() => { const s = allStaff.find(m => m.staff_member_id === planShiftStaffId); if (s && s.roles.length > 0 && !s.roles.includes(planShiftRole)) planShiftRole = s.roles[0]; else if (!s || s.roles.length === 0) planShiftRole = ""; }}>
               <option value="">— Select staff member —</option>
               {#each allStaff as s}
                 <option value={s.staff_member_id}>{s.name} ({s.roles.join(", ")})</option>
@@ -1112,7 +1115,7 @@
             </select>
           </div>
           <div class="form-field">
-            <label class="field-label" for="ps-office">Office</label>
+            <label class="field-label" for="ps-office">Office <span class="required-star" aria-hidden="true">*</span></label>
             <select id="ps-office" bind:value={planShiftOfficeId}>
               {#each offices as o}
                 <option value={o.id}>{o.name}</option>
@@ -1122,7 +1125,7 @@
           <div class="book-row">
             <div class="form-field" style="flex:1">
               <label class="field-label" for="ps-date">Date</label>
-              <input id="ps-date" type="date" bind:value={planShiftDate} />
+              <input id="ps-date" type="date" bind:value={planShiftDate} min={todayLocal()} />
             </div>
           </div>
           <div class="book-row">
@@ -1136,7 +1139,7 @@
             </div>
           </div>
           <div class="form-field">
-            <label class="field-label" for="ps-role">Role for this shift</label>
+            <label class="field-label" for="ps-role">Role for this shift <span class="required-star" aria-hidden="true">*</span></label>
             {#if planShiftStaffId}
               {@const staffMember = allStaff.find((s) => s.staff_member_id === planShiftStaffId)}
               {#if staffMember && staffMember.roles.length > 0}
@@ -1154,7 +1157,7 @@
           </div>
           {#if planShiftError}
             <div class="field-error" role="alert">
-              <svg viewBox="0 0 24 24" stroke-width="1.75" stroke="currentColor" fill="none" aria-hidden="true" class="icon-sm"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+              <svg viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" stroke="currentColor" fill="none" aria-hidden="true" class="icon-sm"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
               {planShiftError}
             </div>
           {/if}
@@ -1169,7 +1172,7 @@
             {#if planShiftLoading}
               <span class="spinner" aria-hidden="true"></span><span class="sr-only">Saving</span>
             {:else}
-              <svg viewBox="0 0 24 24" stroke-width="1.75" stroke="currentColor" fill="none" aria-hidden="true" class="icon-sm"><path d="M12 5v14M5 12h14"/></svg>
+              <svg viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" stroke="currentColor" fill="none" aria-hidden="true" class="icon-sm"><path d="M12 5v14M5 12h14"/></svg>
               Plan shift
             {/if}
           </button>
@@ -1189,7 +1192,7 @@
 
       {#if activeStaff.length === 0}
         <div class="empty-state">
-          <svg viewBox="0 0 24 24" stroke-width="1.75" stroke="currentColor" fill="none" aria-hidden="true" class="empty-state-icon-svg"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
+          <svg viewBox="0 0 24 24" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" stroke="currentColor" fill="none" aria-hidden="true" class="empty-state-icon-svg"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
           <p class="empty-state-title">No staff members</p>
           <p class="empty-state-message">Register staff members in <a href="/staff">Staff</a> to plan shifts.</p>
         </div>
@@ -1222,11 +1225,11 @@
                         <div class="shift-cell" class:shift-cancelled={shift.cancelled}>
                           <span class="shift-times">
                             {#if shift.cancelled}
-                              <svg viewBox="0 0 24 24" stroke-width="1.75" stroke="currentColor" fill="none" aria-hidden="true" class="icon-xs shift-cancelled-icon"><path d="M18 6 6 18M6 6l12 12"/></svg>
+                              <svg viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" stroke="currentColor" fill="none" aria-hidden="true" class="icon-xs shift-cancelled-icon"><path d="M18 6 6 18M6 6l12 12"/></svg>
                             {:else}
-                              <svg viewBox="0 0 24 24" stroke-width="1.75" stroke="currentColor" fill="none" aria-hidden="true" class="icon-xs shift-active-icon"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                              <svg viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" stroke="currentColor" fill="none" aria-hidden="true" class="icon-xs shift-active-icon"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
                             {/if}
-                            {shift.start_time}–{shift.end_time}
+                            {minsTo12h(parseHHMM(shift.start_time))}–{minsTo12h(parseHHMM(shift.end_time))}
                           </span>
                           <span class="shift-role">{shift.role}</span>
                           {#if !shift.cancelled}
@@ -1240,7 +1243,7 @@
                               {#if cancellingShiftId === shift.shift_id}
                                 <span class="spinner spinner-xs" aria-hidden="true"></span>
                               {:else}
-                                <svg viewBox="0 0 24 24" stroke-width="1.75" stroke="currentColor" fill="none" aria-hidden="true" class="icon-xs"><path d="M18 6 6 18M6 6l12 12"/></svg>
+                                <svg viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" stroke="currentColor" fill="none" aria-hidden="true" class="icon-xs"><path d="M18 6 6 18M6 6l12 12"/></svg>
                               {/if}
                             </button>
                           {/if}
@@ -1376,7 +1379,7 @@
               <div class="col-head" class:col-head-off={!rosterEntry}>
                 <div class="col-head-name">{prov.name}</div>
                 {#if rosterEntry}
-                  <div class="col-head-hours">{rosterEntry.start_time}–{rosterEntry.end_time}</div>
+                  <div class="col-head-hours">{minsTo12h(parseHHMM(rosterEntry.start_time))}–{minsTo12h(parseHHMM(rosterEntry.end_time))}</div>
                 {:else}
                   <div class="col-head-off-label">Not scheduled</div>
                 {/if}
@@ -1741,6 +1744,7 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
+    min-height: 44px;
     padding: var(--space-2) var(--space-3);
     background: var(--pearl-mist);
     border: 1.5px solid var(--pearl-mist-dk);
@@ -1764,6 +1768,7 @@
     gap: var(--space-2);
   }
   .slot-btn {
+    min-height: 44px;
     padding: var(--space-2) var(--space-1);
     background: var(--pearl-mist);
     border: 1.5px solid var(--pearl-mist-dk);
@@ -2009,6 +2014,7 @@
     display: flex;
     align-items: center;
     gap: var(--space-2);
+    min-height: 44px;
     padding: var(--space-2) var(--space-4);
     border: none;
     border-radius: calc(var(--radius-md) - 2px);
@@ -2139,12 +2145,14 @@
     border: none;
     cursor: pointer;
     color: var(--slate-fog);
-    padding: 2px;
+    padding: var(--space-2);
     border-radius: var(--radius-sm);
     display: flex;
     align-items: center;
     justify-content: center;
-    opacity: 0;
+    min-width: 44px;
+    min-height: 44px;
+    opacity: 0.35;
     transition: opacity var(--transition-fast), color var(--transition-fast);
   }
   .shift-cell:hover .shift-cancel-btn { opacity: 1; }
@@ -2153,12 +2161,12 @@
 
   /* ── Icon sizes ──────────────────────────────────────── */
   .icon-sm { width: 16px; height: 16px; flex-shrink: 0; }
-  .icon-xs { width: 12px; height: 12px; flex-shrink: 0; }
+  .icon-xs { width: 16px; height: 16px; flex-shrink: 0; }
 
   /* ── Roster empty state SVG icon ─────────────────────── */
   .empty-state-icon-svg {
-    width: 48px;
-    height: 48px;
+    width: 40px;
+    height: 40px;
     color: var(--slate-fog);
     margin-bottom: var(--space-3);
   }
