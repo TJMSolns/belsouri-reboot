@@ -47,6 +47,7 @@
   let bookStartTime = $state("");
   let bookError = $state("");
   let bookLoading = $state(false);
+  let patientSearchDebounce = $state<ReturnType<typeof setTimeout> | null>(null);
   let patientSearchResults = $state<{ patient_id: string; patient_name: string; first_name: string; last_name: string; phone: string | null }[]>([]);
   let bookRoster = $state<ProviderScheduleEntry[]>([]);
   let bookRosterLoading = $state(false);
@@ -312,6 +313,11 @@
     }
   }
 
+  function onPatientSearchInput() {
+    if (patientSearchDebounce) clearTimeout(patientSearchDebounce);
+    patientSearchDebounce = setTimeout(searchPatients, 250);
+  }
+
   function selectPatient(p: typeof patientSearchResults[0]) {
     bookPatientId = p.patient_id;
     bookPatientName = p.patient_name;
@@ -345,7 +351,7 @@
     bookLoading = false;
     if (res.status === "ok") {
       showBookForm = false;
-      toast.success(`Appointment booked for ${bookPatientName}.`);
+      toast.success(`Appointment booked for ${bookPatientName} on ${formatDisplayDate(bookStartDate)} at ${minsTo12h(parseHHMM(bookStartTime))}.`);
       await loadGrid();
     } else {
       bookError = getErrorMessage(res.error);
@@ -359,9 +365,11 @@
       confirmLabel: "Mark complete",
     });
     if (!ok) return;
+    const patientName = detailData?.appointment.patient_name ?? "Appointment";
+    const apptTime = detailData ? ` at ${formatTime(detailData.appointment.start_time)}` : "";
     const res = await commands.completeAppointment(apptId, STAFF_ID);
     if (res.status === "ok") {
-      toast.success("Appointment marked complete.");
+      toast.success(`${patientName}${apptTime} marked complete.`);
       closeDetail();
       await loadGrid();
     } else {
@@ -377,9 +385,11 @@
       destructive: true,
     });
     if (!ok) return;
+    const patientName = detailData?.appointment.patient_name ?? "Appointment";
+    const apptTime = detailData ? ` at ${formatTime(detailData.appointment.start_time)}` : "";
     const res = await commands.markAppointmentNoShow(apptId, STAFF_ID);
     if (res.status === "ok") {
-      toast.success("Appointment marked no-show.");
+      toast.success(`${patientName}${apptTime} marked no-show.`);
       closeDetail();
       await loadGrid();
     } else {
@@ -388,9 +398,11 @@
   }
 
   async function doCancel(apptId: string) {
+    const patientName = detailData?.appointment.patient_name ?? "Appointment";
+    const apptTime = detailData ? ` at ${formatTime(detailData.appointment.start_time)}` : "";
     const res = await commands.cancelAppointment(apptId, STAFF_ID, cancelReason.trim() || null);
     if (res.status === "ok") {
-      toast.success("Appointment cancelled.");
+      toast.success(`${patientName}${apptTime} cancelled.`);
       closeDetail();
       await loadGrid();
     } else {
@@ -405,6 +417,7 @@
     const res = await commands.addAppointmentNote(detailApptId, noteText, STAFF_ID);
     noteLoading = false;
     if (res.status === "ok") {
+      toast.success("Note added.");
       noteText = "";
       const dr = await commands.getAppointment(detailApptId);
       if (dr.status === "ok") detailData = dr.data;
@@ -449,7 +462,7 @@
 
   <div class="drawer" role="dialog" aria-modal="true" aria-labelledby="book-drawer-title">
     <div class="drawer-header">
-      <h2 class="drawer-title" id="book-drawer-title">Book Appointment</h2>
+      <h2 class="drawer-title" id="book-drawer-title">Book appointment</h2>
       <button class="btn btn-ghost btn-icon btn-sm" onclick={() => (showBookForm = false)} aria-label="Close booking form">✕</button>
     </div>
 
@@ -478,7 +491,7 @@
           <div class="load-row"><div class="spinner spinner-sm"></div> Checking availability…</div>
         {:else if bookRoster.length === 0}
           <p class="field-hint">
-            No providers scheduled on {bookStartDate} at this office.
+            No providers scheduled on {formatDisplayDate(bookStartDate)} at this office.
             <a href="/setup">Set availability in Setup → Providers</a>.
           </p>
         {:else}
@@ -518,13 +531,13 @@
         <div class="book-section">
           <p class="book-section-label">Patient</p>
           <div class="patient-search-wrap">
-            <label class="sr-only" for="book-patient">Search patient by name</label>
+            <label class="field-label" for="book-patient">Search by name</label>
             <input
               id="book-patient"
               type="text"
               bind:value={bookPatientSearch}
               placeholder="Type name to search…"
-              oninput={searchPatients}
+              oninput={onPatientSearchInput}
               autocomplete="off"
             />
             {#if patientSearchResults.length > 0}
@@ -539,7 +552,7 @@
                 {/each}
               </ul>
             {:else if bookPatientSearch.trim().length >= 2 && !bookPatientId}
-              <p class="field-hint">No patients found. <a href="/patients">Register patient first</a>.</p>
+              <p class="field-hint">No patients found. <a href="/patients">Register a patient first</a>.</p>
             {/if}
             {#if bookPatientId}
               <div class="selected-patient">
@@ -557,7 +570,7 @@
           {#if procedures.length === 0}
             <p class="field-hint">No procedures set up. <a href="/setup">Go to Setup → Procedure Types</a>.</p>
           {:else}
-            <label class="sr-only" for="book-procedure">Select procedure</label>
+            <label class="field-label" for="book-procedure">Select procedure</label>
             <select id="book-procedure" bind:value={bookProcedureId}>
               <option value="">— Select procedure —</option>
               {#each procedures as p}
@@ -708,7 +721,7 @@
         class="btn btn-ghost btn-sm"
         onclick={() => { showCallList = !showCallList; if (showCallList) loadCallList(); }}
       >
-        {showCallList ? "Hide call list" : "Tomorrow's call list"}
+        {showCallList ? "Hide call list" : "Call list"}
       </button>
       <button
         class="btn btn-primary"
@@ -722,7 +735,7 @@
 
   {#if offices.length === 0}
     <div class="empty-state">
-      <span class="empty-state-icon">🏥</span>
+      <span class="empty-state-icon" aria-hidden="true">🏥</span>
       <p class="empty-state-title">No offices configured</p>
       <p class="empty-state-message">Go to <a href="/setup">Setup → Offices</a> to add an office.</p>
     </div>
@@ -772,7 +785,7 @@
                   <th>Time</th>
                   <th>Patient</th>
                   <th>Phone</th>
-                  <th>Pref.</th>
+                  <th>Pref. channel</th>
                   <th>Procedure</th>
                   <th>Provider</th>
                 </tr>
@@ -803,13 +816,13 @@
       </div>
     {:else if officeHoursEntry === null}
       <div class="empty-state">
-        <span class="empty-state-icon">🔒</span>
+        <span class="empty-state-icon" aria-hidden="true">🔒</span>
         <p class="empty-state-title">Closed on {dayName}</p>
         <p class="empty-state-message">Set office hours in <a href="/setup">Setup → Offices</a>.</p>
       </div>
     {:else if officeProviders.length === 0}
       <div class="empty-state">
-        <span class="empty-state-icon">👥</span>
+        <span class="empty-state-icon" aria-hidden="true">👥</span>
         <p class="empty-state-title">No providers assigned</p>
         <p class="empty-state-message">Assign providers to this office in <a href="/setup">Setup → Providers</a>.</p>
       </div>
@@ -825,7 +838,7 @@
               {#if rosterEntry}
                 <div class="col-head-hours">{rosterEntry.start_time}–{rosterEntry.end_time}</div>
               {:else}
-                <div class="col-head-off-label">Not working</div>
+                <div class="col-head-off-label">Not scheduled</div>
               {/if}
             </div>
           {/each}
@@ -899,7 +912,7 @@
                   <div class="h-line" style="top: {tick.top}px" aria-hidden="true"></div>
                 {/each}
                 <div class="unavail unavail-full" style="top: 0; height: {gridHeight}px" aria-hidden="true"></div>
-                <span class="off-label">Not working</span>
+                <span class="off-label">Not scheduled</span>
               </div>
             {/if}
           {/each}

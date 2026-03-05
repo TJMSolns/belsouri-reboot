@@ -43,7 +43,7 @@
 
   async function seed() {
     if (types.length > 0) {
-      const ok = await confirm({ title: "Seed default types", message: "Add the 10 default procedure types? Existing types won't be affected.", confirmLabel: "Add defaults" });
+      const ok = await confirm({ title: "Add default procedure types", message: "Add the 10 default procedure types? Existing types won't be affected.", confirmLabel: "Add defaults" });
       if (!ok) return;
     }
     seeding = true; error = null;
@@ -56,7 +56,7 @@
   }
 
   async function define() {
-    if (!newName.trim()) { defineError = "Name is required"; return; }
+    if (!newName.trim()) { defineError = "Name is required."; return; }
     defining = true; defineError = null;
     const r = await commands.defineProcedureType(newName.trim(), newCategory, newDuration);
     defining = false;
@@ -100,7 +100,7 @@
     <h2>Procedure Types</h2>
     <div class="header-actions">
       <button class="btn-secondary" onclick={seed} disabled={seeding}>
-        {#if seeding}<span class="spinner" aria-hidden="true"></span><span class="sr-only">Seeding</span>{:else}Seed Defaults{/if}
+        {#if seeding}<span class="spinner" aria-hidden="true"></span><span class="sr-only">Adding defaults</span>{:else}Add Defaults{/if}
       </button>
       <button class="btn-primary" onclick={() => (showDefine = !showDefine)}>
         {showDefine ? "Cancel" : "+ Define"}
@@ -114,7 +114,7 @@
     <div class="empty-state">
       <p>No procedure types defined yet.</p>
       <button class="btn-primary" onclick={seed} disabled={seeding}>
-        {#if seeding}<span class="spinner" aria-hidden="true"></span><span class="sr-only">Seeding</span>{:else}Seed 10 defaults{/if}
+        {#if seeding}<span class="spinner" aria-hidden="true"></span><span class="sr-only">Adding defaults</span>{:else}Add 10 defaults{/if}
       </button>
     </div>
   {/if}

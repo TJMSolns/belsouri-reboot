@@ -2,6 +2,8 @@
   import { commands, type PatientDto, type PatientWithNotesDto, type PatientNoteDto } from "$lib/bindings";
   import { onMount } from "svelte";
   import { formatDate } from "$lib/utils/date";
+  import { toast } from "$lib/stores/toast";
+  import { confirm } from "$lib/stores/confirm";
 
   // ── Search state ─────────────────────────────────────────────────────────────
   let searchName = $state("");
@@ -241,9 +243,16 @@
   }
 
   async function archivePatient(id: string) {
-    if (!confirm("Archive this patient?")) return;
+    const ok = await confirm({
+      title: "Archive patient",
+      message: "Archiving hides this patient from active searches. You can restore them later.",
+      confirmLabel: "Archive",
+      destructive: true,
+    });
+    if (!ok) return;
     const r = await commands.archivePatient(id, STAFF_ID);
     if (r.status === "ok") {
+      toast.success("Patient archived.");
       patients = patients.map((p) => p.patient_id === id ? r.data : p);
       if (detailData?.patient.patient_id === id) {
         detailData = { ...detailData, patient: r.data };
@@ -254,8 +263,15 @@
   }
 
   async function unarchivePatient(id: string) {
+    const ok = await confirm({
+      title: "Restore patient",
+      message: "Restore this patient to the active list?",
+      confirmLabel: "Restore",
+    });
+    if (!ok) return;
     const r = await commands.unarchivePatient(id, STAFF_ID);
     if (r.status === "ok") {
+      toast.success("Patient restored.");
       patients = patients.map((p) => p.patient_id === id ? r.data : p);
       if (detailData?.patient.patient_id === id) {
         detailData = { ...detailData, patient: r.data };
@@ -338,7 +354,7 @@
         oninput={onNameInput}
       />
       {#if searchName.length === 1}
-        <p class="search-hint">Type at least 2 characters to search</p>
+        <p class="search-hint">Type at least 2 characters to search.</p>
       {/if}
     </div>
     <label for="search-phone" class="sr-only">Search by phone</label>

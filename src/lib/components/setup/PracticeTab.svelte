@@ -41,7 +41,7 @@
   }
 
   async function save() {
-    if (!name.trim()) { error = "Practice name is required"; return; }
+    if (!name.trim()) { error = "Practice name is required."; return; }
     saving = true;
     error = null;
     const r = await commands.updatePracticeDetails(
@@ -84,13 +84,13 @@
     </div>
     <div class="field">
       <label for="email">Email</label>
-      <input id="email" type="email" bind:value={email} placeholder="info@smildental.com" />
+      <input id="email" type="email" bind:value={email} placeholder="info@smiledental.com" />
     </div>
   </div>
 
   <div class="field">
     <label for="website">Website</label>
-    <input id="website" bind:value={website} placeholder="https://smilental.com" />
+    <input id="website" bind:value={website} placeholder="https://smiledental.com" />
   </div>
 
   <div class="field">

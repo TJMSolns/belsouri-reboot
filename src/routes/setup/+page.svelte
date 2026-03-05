@@ -25,8 +25,10 @@
       <button
         class="tab-btn"
         class:active={activeTab === tab.id}
+        id="tab-{tab.id}"
         role="tab"
         aria-selected={activeTab === tab.id}
+        aria-controls="tabpanel-{tab.id}"
         onclick={() => (activeTab = tab.id)}
       >
         {tab.label}
@@ -34,7 +36,7 @@
     {/each}
   </div>
 
-  <div class="tab-content">
+  <div class="tab-content" id="tabpanel-{activeTab}" role="tabpanel" aria-labelledby="tab-{activeTab}">
     {#if activeTab === "practice"}
       <PracticeTab />
     {:else if activeTab === "offices"}

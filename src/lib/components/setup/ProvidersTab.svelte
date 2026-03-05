@@ -62,7 +62,7 @@
   }
 
   async function register() {
-    if (!newName.trim()) { registerError = "Name is required"; return; }
+    if (!newName.trim()) { registerError = "Name is required."; return; }
     registering = true; registerError = null;
     const r = await commands.registerProvider(newName.trim(), newType);
     registering = false;
@@ -162,7 +162,7 @@
 
   async function addException(pid: string) {
     const f = excForm[pid];
-    if (!f?.start || !f?.end) { actionError = { ...actionError, [pid]: "Start and end date are required" }; return; }
+    if (!f?.start || !f?.end) { actionError = { ...actionError, [pid]: "Start and end date are required." }; return; }
     const r = await commands.setProviderException(pid, f.start, f.end, f.reason || null);
     if (r.status === "ok") {
       providers = providers.map((p) => p.id === pid ? r.data : p);
@@ -305,14 +305,14 @@
                 </button>
               {/each}
               {#if offices.length === 0}
-                <span class="muted">Create offices first</span>
+                <span class="muted">Create offices first.</span>
               {/if}
             </div>
 
             <!-- Availability per office -->
             {#if provider.office_ids.length > 0}
               <h4>Weekly Availability</h4>
-              <p class="hours-hint">Check a day to mark availability. Edit times and tab away to save.</p>
+              <p class="hours-hint">Check a day to mark availability. Edit times and click away to save.</p>
               {#each provider.office_ids as oid}
                 <div class="avail-section">
                   <div class="avail-office-label">{officeName(oid)}</div>

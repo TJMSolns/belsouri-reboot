@@ -18,6 +18,8 @@
   });
 </script>
 
+<a href="#main-content" class="skip-link">Skip to main content</a>
+
 <nav class="app-nav" aria-label="Main navigation">
   <a href="/" class="brand" aria-label="Belsouri home">Belsouri</a>
   <div class="nav-links">
@@ -44,12 +46,29 @@
   </div>
 </nav>
 
-{@render children()}
+<main id="main-content">{@render children()}</main>
 
 <Toast />
 <ConfirmDialog />
 
 <style>
+  .skip-link {
+    position: absolute;
+    top: -100%;
+    left: var(--space-4, 16px);
+    z-index: 200;
+    padding: var(--space-2, 8px) var(--space-4, 16px);
+    background: var(--caribbean-teal, #008B99);
+    color: #fff;
+    font-family: var(--font-body, 'Inter', sans-serif);
+    font-size: var(--text-sm, 0.875rem);
+    font-weight: 600;
+    border-radius: 0 0 var(--radius-sm, 4px) var(--radius-sm, 4px);
+    text-decoration: none;
+    transition: top 0.1s;
+  }
+  .skip-link:focus { top: 0; }
+
   .app-nav {
     position: sticky;
     top: 0;

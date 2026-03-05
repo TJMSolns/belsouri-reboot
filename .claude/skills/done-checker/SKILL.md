@@ -61,6 +61,16 @@ sqlite3 ~/.local/share/com.belsouri.app/projections.db \
 - [ ] No silent failures — if an action requires preconditions (e.g. select an office first), tell the user
 - [ ] First-run / fresh-install experience makes sense with zero data
 
+### Design System Compliance (for any task touching Svelte files — run /ux-review, /copy-check, /icon-audit)
+- [ ] No hardcoded hex colours in Svelte files — all colours use `var(--token-name)` from `src/app.css` (POL-001)
+- [ ] Fonts are `'Lexend'` for headings/buttons and `'Inter'` for data/body — no `system-ui` or other families
+- [ ] All inline SVG icons pass `/icon-audit`: viewBox 0 0 24 24, stroke-width 2, round caps/joins, `stroke="currentColor"` (POL-002)
+- [ ] No icon-only status or action without a text label or ARIA label (colour+icon pairing rule)
+- [ ] All error messages name the specific object, specific problem, and resolution path — no "An error occurred" or "Invalid input" (POL-003)
+- [ ] Navigation follows journey-aware architecture: sub-tasks use sheets, CTAs carry context forward (PDR-003)
+- [ ] No confirmation modal collects multi-field data (modals for yes/no only)
+- [ ] All user-facing text passes `/copy-check`: care-based verbs, DD/MM/YYYY dates, 12-hour time, JMD currency, correct job titles
+
 ### Contract Alignment
 - [ ] Rust DTOs match TypeScript interfaces
 - [ ] `#[tauri::command]` has NO `rename_all` attribute (Tauri v2 default handles camelCase→snake_case)
@@ -123,6 +133,14 @@ USER EXPERIENCE:
 - [x] Loading states: Present
 - [x] Success feedback: Present
 - [x] Error messages: Helpful
+
+DESIGN SYSTEM (for Svelte tasks only — skip if no .svelte files changed):
+- [x] /ux-review: PASS (or N/A)
+- [x] /copy-check: PASS (or N/A)
+- [x] /icon-audit: PASS (or N/A)
+- [x] No hardcoded hex in Svelte files
+- [x] Fonts: Lexend + Inter only
+- [x] Error messages name specific object + problem + resolution
 
 OVERALL: [PASS / FAIL]
 

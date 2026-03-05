@@ -65,8 +65,8 @@
   }
 
   async function createOffice() {
-    if (!newName.trim()) { createError = "Name is required"; return; }
-    if (newChairs < 1) { createError = "Chair count must be at least 1"; return; }
+    if (!newName.trim()) { createError = "Name is required."; return; }
+    if (newChairs < 1) { createError = "Chair count must be at least 1."; return; }
     creating = true;
     createError = null;
     const r = await commands.createOffice(newName.trim(), newChairs);
@@ -86,6 +86,7 @@
     const r = await commands.renameOffice(office.id, newName.trim());
     if (r.status === "ok") {
       offices = offices.map((o) => (o.id === office.id ? r.data : o));
+      toast.success(`Office renamed to ${r.data.name}.`);
     } else {
       error = r.error;
     }
@@ -96,6 +97,7 @@
     const r = await commands.updateOfficeChairCount(office.id, count);
     if (r.status === "ok") {
       offices = offices.map((o) => (o.id === office.id ? r.data : o));
+      toast.success("Chair count updated.");
     } else {
       error = r.error;
     }
@@ -233,7 +235,7 @@
   {/if}
 
   {#if offices.length === 0 && !showCreate}
-    <p class="empty">No offices yet. Create one above.</p>
+    <p class="empty">No offices yet. Use + New Office to create your first office.</p>
   {/if}
 
   <div class="office-list">
@@ -324,7 +326,7 @@
                 />
               </div>
               <div class="field">
-                <label for="office-sub-{office.id}">Parish / State</label>
+                <label for="office-sub-{office.id}">Parish / Region</label>
                 <input id="office-sub-{office.id}"
                   value={addrInputs[office.id]?.sub ?? ""}
                   placeholder="e.g. Kingston"
@@ -348,7 +350,7 @@
 
             <!-- Hours editor -->
             <h4>Operating Hours</h4>
-            <p class="hours-hint">Check a day to mark it open. Edit times and tab away to save.</p>
+            <p class="hours-hint">Check a day to mark it open. Edit times and click away to save.</p>
             <div class="hours-grid">
               <div class="hours-header">Day</div>
               <div class="hours-header">Open</div>

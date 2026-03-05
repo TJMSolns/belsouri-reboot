@@ -217,7 +217,7 @@
   async function doResetPin(target_id: string) {
     const ok = await confirm({
       title: "Reset PIN",
-      message: "Reset this staff member's PIN? They will need to set a new one before switching identity.",
+      message: "Reset this staff member's PIN? They will need to set a new one before they can sign in.",
       confirmLabel: "Reset PIN",
       destructive: true,
     });
@@ -231,7 +231,7 @@
     pinSaving = false;
     if (r.status === "ok") {
       staff = staff.map((s) => s.staff_member_id === target_id ? r.data : s);
-      toast.success("PIN reset successfully.");
+      toast.success("PIN reset.");
     } else { pinError = r.error; }
   }
 
