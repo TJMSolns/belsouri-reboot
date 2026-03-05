@@ -261,30 +261,30 @@
       {#if regWarning}<p class="warning">⚠ {regWarning}</p>{/if}
       <div class="form-row">
         <div class="field">
-          <label>First Name *</label>
-          <input bind:value={regFirstName} placeholder="Maria" />
+          <label for="reg-first-name">First Name *</label>
+          <input id="reg-first-name" bind:value={regFirstName} placeholder="Maria" />
         </div>
         <div class="field">
-          <label>Last Name *</label>
-          <input bind:value={regLastName} placeholder="Brown" />
+          <label for="reg-last-name">Last Name *</label>
+          <input id="reg-last-name" bind:value={regLastName} placeholder="Brown" />
         </div>
         <div class="field">
-          <label>Date of Birth</label>
-          <input type="date" bind:value={regDob} />
+          <label for="reg-dob">Date of Birth</label>
+          <input id="reg-dob" type="date" bind:value={regDob} />
         </div>
       </div>
       <div class="form-row">
         <div class="field">
-          <label>Phone</label>
-          <input bind:value={regPhone} placeholder="+1-876-555-0100" />
+          <label for="reg-phone">Phone</label>
+          <input id="reg-phone" bind:value={regPhone} placeholder="+1-876-555-0100" />
         </div>
         <div class="field">
-          <label>Email</label>
-          <input type="email" bind:value={regEmail} placeholder="maria@example.com" />
+          <label for="reg-email">Email</label>
+          <input id="reg-email" type="email" bind:value={regEmail} placeholder="maria@example.com" />
         </div>
         <div class="field">
-          <label>Preferred Channel</label>
-          <select bind:value={regChannel}>
+          <label for="reg-channel">Preferred Channel</label>
+          <select id="reg-channel" bind:value={regChannel}>
             {#each CHANNELS as c}<option value={c}>{c || "—"}</option>{/each}
           </select>
         </div>
@@ -304,13 +304,17 @@
 
   <!-- Search -->
   <div class="search-bar">
+    <label for="search-name" class="sr-only">Search by name</label>
     <input
+      id="search-name"
       class="search-input"
       placeholder="Search by name…"
       bind:value={searchName}
       oninput={runSearch}
     />
+    <label for="search-phone" class="sr-only">Search by phone</label>
     <input
+      id="search-phone"
       class="search-input"
       placeholder="Search by phone…"
       bind:value={searchPhone}
@@ -329,7 +333,11 @@
   <!-- Patient list -->
   {#if searched && patients.length === 0}
     <p class="empty">
-      {searchName || searchPhone ? "No patients match that search." : "No patients registered yet."}
+      {#if searchName || searchPhone}
+        No patients match that search. Try a different name or phone number.
+      {:else}
+        No patients registered yet. Click <strong>+ Register Patient</strong> to add your first patient.
+      {/if}
     </p>
   {/if}
 
@@ -341,6 +349,7 @@
           class="patient-row"
           role="button"
           tabindex="0"
+          aria-expanded={expandedId === patient.patient_id}
           onclick={() => toggleExpand(patient.patient_id)}
           onkeydown={(e) => e.key === "Enter" && toggleExpand(patient.patient_id)}
         >
@@ -374,32 +383,32 @@
                   {#if demoError}<p class="error">{demoError}</p>{/if}
                   <div class="edit-grid">
                     <div class="field">
-                      <label>First Name</label>
-                      <input bind:value={demoFirstName} />
+                      <label for="demo-first-{expandedId}">First Name</label>
+                      <input id="demo-first-{expandedId}" bind:value={demoFirstName} />
                     </div>
                     <div class="field">
-                      <label>Last Name</label>
-                      <input bind:value={demoLastName} />
+                      <label for="demo-last-{expandedId}">Last Name</label>
+                      <input id="demo-last-{expandedId}" bind:value={demoLastName} />
                     </div>
                     <div class="field">
-                      <label>Date of Birth</label>
-                      <input type="date" bind:value={demoDob} />
+                      <label for="demo-dob-{expandedId}">Date of Birth</label>
+                      <input id="demo-dob-{expandedId}" type="date" bind:value={demoDob} />
                     </div>
                     <div class="field">
-                      <label>Address Line 1</label>
-                      <input bind:value={demoAddr1} />
+                      <label for="demo-addr1-{expandedId}">Address Line 1</label>
+                      <input id="demo-addr1-{expandedId}" bind:value={demoAddr1} />
                     </div>
                     <div class="field">
-                      <label>City / Town</label>
-                      <input bind:value={demoCity} />
+                      <label for="demo-city-{expandedId}">City / Town</label>
+                      <input id="demo-city-{expandedId}" bind:value={demoCity} />
                     </div>
                     <div class="field">
-                      <label>Parish / Region</label>
-                      <input bind:value={demoSubdiv} />
+                      <label for="demo-subdiv-{expandedId}">Parish / Region</label>
+                      <input id="demo-subdiv-{expandedId}" bind:value={demoSubdiv} />
                     </div>
                     <div class="field">
-                      <label>Country</label>
-                      <input bind:value={demoCountry} />
+                      <label for="demo-country-{expandedId}">Country</label>
+                      <input id="demo-country-{expandedId}" bind:value={demoCountry} />
                     </div>
                   </div>
                   <div class="edit-actions">
@@ -434,16 +443,16 @@
                   {#if contError}<p class="error">{contError}</p>{/if}
                   <div class="edit-grid">
                     <div class="field">
-                      <label>Phone</label>
-                      <input bind:value={contPhone} placeholder="+1-876-555-0100" />
+                      <label for="cont-phone-{expandedId}">Phone</label>
+                      <input id="cont-phone-{expandedId}" bind:value={contPhone} placeholder="+1-876-555-0100" />
                     </div>
                     <div class="field">
-                      <label>Email</label>
-                      <input type="email" bind:value={contEmail} />
+                      <label for="cont-email-{expandedId}">Email</label>
+                      <input id="cont-email-{expandedId}" type="email" bind:value={contEmail} />
                     </div>
                     <div class="field">
-                      <label>Preferred Channel</label>
-                      <select bind:value={contChannel}>
+                      <label for="cont-channel-{expandedId}">Preferred Channel</label>
+                      <select id="cont-channel-{expandedId}" bind:value={contChannel}>
                         {#each CHANNELS as c}<option value={c}>{c || "—"}</option>{/each}
                       </select>
                     </div>

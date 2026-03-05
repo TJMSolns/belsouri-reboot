@@ -38,7 +38,7 @@ fn staff_stream(staff_member_id: &str) -> String {
 
 /// First-run bootstrap: first person claims the PracticeManager role.
 /// Rejected if any active PracticeManager already exists.
-#[tauri::command(rename_all = "snake_case")]
+#[tauri::command]
 #[specta::specta]
 pub fn claim_practice_manager_role(
     state: State<'_, AppState>,
@@ -89,7 +89,7 @@ pub fn claim_practice_manager_role(
 }
 
 /// Register a new staff member. Requires at least one active PracticeManager.
-#[tauri::command(rename_all = "snake_case")]
+#[tauri::command]
 #[specta::specta]
 pub fn register_staff_member(
     state: State<'_, AppState>,
@@ -141,7 +141,7 @@ pub fn register_staff_member(
     build_dto(&state, &staff_member_id)
 }
 
-#[tauri::command(rename_all = "snake_case")]
+#[tauri::command]
 #[specta::specta]
 pub fn assign_role(
     state: State<'_, AppState>,
@@ -178,7 +178,7 @@ pub fn assign_role(
     build_dto(&state, &staff_member_id)
 }
 
-#[tauri::command(rename_all = "snake_case")]
+#[tauri::command]
 #[specta::specta]
 pub fn remove_role(
     state: State<'_, AppState>,
@@ -224,7 +224,7 @@ pub fn remove_role(
     build_dto(&state, &staff_member_id)
 }
 
-#[tauri::command(rename_all = "snake_case")]
+#[tauri::command]
 #[specta::specta]
 pub fn set_pin(
     state: State<'_, AppState>,
@@ -261,7 +261,7 @@ pub fn set_pin(
     build_dto(&state, &staff_member_id)
 }
 
-#[tauri::command(rename_all = "snake_case")]
+#[tauri::command]
 #[specta::specta]
 pub fn change_pin(
     state: State<'_, AppState>,
@@ -302,7 +302,7 @@ pub fn change_pin(
 }
 
 /// Practice Manager resets another staff member's PIN (forgotten PIN recovery).
-#[tauri::command(rename_all = "snake_case")]
+#[tauri::command]
 #[specta::specta]
 pub fn reset_pin(
     state: State<'_, AppState>,
@@ -351,7 +351,7 @@ pub fn reset_pin(
     build_dto(&state, &staff_member_id)
 }
 
-#[tauri::command(rename_all = "snake_case")]
+#[tauri::command]
 #[specta::specta]
 pub fn archive_staff_member(
     state: State<'_, AppState>,
@@ -389,7 +389,7 @@ pub fn archive_staff_member(
     build_dto(&state, &staff_member_id)
 }
 
-#[tauri::command(rename_all = "snake_case")]
+#[tauri::command]
 #[specta::specta]
 pub fn unarchive_staff_member(
     state: State<'_, AppState>,
@@ -422,7 +422,7 @@ pub fn unarchive_staff_member(
 
 /// Verify a PIN without creating any domain event. Returns true if correct.
 /// This is a session concern — no event is emitted.
-#[tauri::command(rename_all = "snake_case")]
+#[tauri::command]
 #[specta::specta]
 pub fn verify_staff_pin(
     state: State<'_, AppState>,
@@ -442,7 +442,7 @@ pub fn verify_staff_pin(
     Ok(verify_pin(&pin, &hash))
 }
 
-#[tauri::command(rename_all = "snake_case")]
+#[tauri::command]
 #[specta::specta]
 pub fn list_staff_members(
     state: State<'_, AppState>,
@@ -467,7 +467,7 @@ pub fn list_staff_members(
     Ok(dtos)
 }
 
-#[tauri::command(rename_all = "snake_case")]
+#[tauri::command]
 #[specta::specta]
 pub fn get_staff_member_dto(
     state: State<'_, AppState>,
@@ -478,7 +478,7 @@ pub fn get_staff_member_dto(
 }
 
 /// Staff Management setup step: complete when at least one active PM has a PIN.
-#[tauri::command(rename_all = "snake_case")]
+#[tauri::command]
 #[specta::specta]
 pub fn get_staff_setup_status(
     state: State<'_, AppState>,

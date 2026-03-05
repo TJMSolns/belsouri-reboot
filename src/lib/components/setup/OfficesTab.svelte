@@ -20,6 +20,12 @@
   let hoursError = $state<Record<string, string>>({});
   let hoursSaving = $state<Record<string, boolean>>({});
 
+  // Address editor state per expanded office
+  type AddrFields = { addr1: string; addr2: string; city: string; sub: string; country: string };
+  let addrInputs = $state<Record<string, AddrFields>>({});
+  let addrSaving = $state<Record<string, boolean>>({});
+  let addrError = $state<Record<string, string>>({});
+
   onMount(load);
 
   async function load() {
@@ -45,6 +51,13 @@
           inputs[d] = { open: h?.open_time ?? "", close: h?.close_time ?? "" };
         }
         hoursInputs = { ...hoursInputs, [id]: inputs as any };
+        addrInputs = { ...addrInputs, [id]: {
+          addr1: office.address_line_1 ?? "",
+          addr2: office.address_line_2 ?? "",
+          city: office.city_town ?? "",
+          sub: office.subdivision ?? "",
+          country: office.country ?? "",
+        } };
       }
     }
   }
@@ -108,12 +121,54 @@
     hoursSaving = { ...hoursSaving, [`${officeId}-${day}`]: false };
     if (r.status === "ok") {
       offices = offices.map((o) => (o.id === officeId ? r.data : o));
-      // Clear the inputs for this day
       const existing = (hoursInputs[officeId] as any) ?? {};
       hoursInputs = { ...hoursInputs, [officeId]: { ...existing, [day]: { open: "", close: "" } } };
     } else {
       hoursError = { ...hoursError, [`${officeId}-${day}`]: r.error };
     }
+  }
+
+  async function checkDay(officeId: string, day: string, checked: boolean) {
+    if (!checked) { await closeDay(officeId, day); return; }
+    const existing = (hoursInputs[officeId] as any) ?? {};
+    hoursInputs = { ...hoursInputs, [officeId]: { ...existing, [day]: { open: "08:00", close: "17:00" } } };
+    hoursSaving = { ...hoursSaving, [`${officeId}-${day}`]: true };
+    hoursError = { ...hoursError, [`${officeId}-${day}`]: "" };
+    const r = await commands.setOfficeHours(officeId, day, "08:00", "17:00");
+    hoursSaving = { ...hoursSaving, [`${officeId}-${day}`]: false };
+    if (r.status === "ok") offices = offices.map((o) => (o.id === officeId ? r.data : o));
+    else hoursError = { ...hoursError, [`${officeId}-${day}`]: r.error };
+  }
+
+  async function blurHours(officeId: string, day: string) {
+    const inputs = (hoursInputs[officeId] as any)?.[day];
+    if (inputs?.open && inputs?.close) await setHours(officeId, day);
+  }
+
+  async function saveAddress(officeId: string) {
+    const addr = addrInputs[officeId];
+    if (!addr) return;
+    addrSaving = { ...addrSaving, [officeId]: true };
+    addrError = { ...addrError, [officeId]: "" };
+    const r = await commands.setOfficeAddress(
+      officeId,
+      addr.addr1 || null,
+      addr.addr2 || null,
+      addr.city || null,
+      addr.sub || null,
+      addr.country || null,
+    );
+    addrSaving = { ...addrSaving, [officeId]: false };
+    if (r.status === "ok") {
+      offices = offices.map((o) => (o.id === officeId ? r.data : o));
+    } else {
+      addrError = { ...addrError, [officeId]: r.error };
+    }
+  }
+
+  function setAddrInput(officeId: string, field: keyof AddrFields, val: string) {
+    const existing = addrInputs[officeId] ?? { addr1: "", addr2: "", city: "", sub: "", country: "" };
+    addrInputs = { ...addrInputs, [officeId]: { ...existing, [field]: val } };
   }
 
   async function archiveOffice(id: string) {
@@ -158,12 +213,12 @@
       {#if createError}<p class="error">{createError}</p>{/if}
       <div class="row">
         <div class="field">
-          <label>Name</label>
-          <input bind:value={newName} placeholder="e.g. Kingston" />
+          <label for="new-office-name">Name</label>
+          <input id="new-office-name" bind:value={newName} placeholder="e.g. Kingston" />
         </div>
         <div class="field" style="max-width:120px">
-          <label>Chairs</label>
-          <input type="number" min="1" bind:value={newChairs} />
+          <label for="new-office-chairs">Chairs</label>
+          <input id="new-office-chairs" type="number" min="1" bind:value={newChairs} />
         </div>
         <div class="field" style="justify-content:flex-end; padding-top:1.4rem">
           <button type="submit" class="btn-primary" disabled={creating}>
@@ -182,6 +237,7 @@
     {#each offices as office (office.id)}
       <div class="office-card" class:archived={office.archived}>
         <div class="office-row" role="button" tabindex="0"
+          aria-expanded={expandedId === office.id}
           onclick={() => toggleExpand(office.id)}
           onkeydown={(e) => e.key === "Enter" && toggleExpand(office.id)}>
           <div class="office-info">
@@ -190,6 +246,11 @@
             <span class="office-meta">
               {office.hours.length} day{office.hours.length !== 1 ? "s" : ""} set
             </span>
+            {#if office.city_town || office.country}
+              <span class="office-meta office-addr">
+                {[office.city_town, office.country].filter(Boolean).join(", ")}
+              </span>
+            {/if}
             {#if office.archived}
               <span class="badge archived-badge">Archived</span>
             {/if}
@@ -202,16 +263,16 @@
             <!-- Rename & chairs inline -->
             <div class="detail-row">
               <div class="field">
-                <label>Name</label>
-                <input
+                <label for="office-name-{office.id}">Name</label>
+                <input id="office-name-{office.id}"
                   value={office.name}
                   onblur={(e) => renameOffice(office, (e.target as HTMLInputElement).value)}
                   onkeydown={(e) => e.key === "Enter" && renameOffice(office, (e.target as HTMLInputElement).value)}
                 />
               </div>
               <div class="field" style="max-width:110px">
-                <label>Chairs</label>
-                <input
+                <label for="office-chairs-{office.id}">Chairs</label>
+                <input id="office-chairs-{office.id}"
                   type="number" min="1"
                   value={office.chair_count}
                   onblur={(e) => updateChairs(office, Number((e.target as HTMLInputElement).value))}
@@ -225,44 +286,105 @@
               {/if}
             </div>
 
+            <!-- Address -->
+            <h4>Address</h4>
+            {#if addrError[office.id]}
+              <p class="field-error">{addrError[office.id]}</p>
+            {/if}
+            <div class="addr-grid">
+              <div class="field addr-full">
+                <label for="office-addr1-{office.id}">Address Line 1</label>
+                <input id="office-addr1-{office.id}"
+                  value={addrInputs[office.id]?.addr1 ?? ""}
+                  placeholder="Street address"
+                  oninput={(e) => setAddrInput(office.id, "addr1", (e.target as HTMLInputElement).value)}
+                  onblur={() => saveAddress(office.id)}
+                />
+              </div>
+              <div class="field addr-full">
+                <label for="office-addr2-{office.id}">Address Line 2</label>
+                <input id="office-addr2-{office.id}"
+                  value={addrInputs[office.id]?.addr2 ?? ""}
+                  placeholder="Suite, floor, etc. (optional)"
+                  oninput={(e) => setAddrInput(office.id, "addr2", (e.target as HTMLInputElement).value)}
+                  onblur={() => saveAddress(office.id)}
+                />
+              </div>
+              <div class="field">
+                <label for="office-city-{office.id}">City / Town</label>
+                <input id="office-city-{office.id}"
+                  value={addrInputs[office.id]?.city ?? ""}
+                  placeholder="e.g. Kingston"
+                  oninput={(e) => setAddrInput(office.id, "city", (e.target as HTMLInputElement).value)}
+                  onblur={() => saveAddress(office.id)}
+                />
+              </div>
+              <div class="field">
+                <label for="office-sub-{office.id}">Parish / State</label>
+                <input id="office-sub-{office.id}"
+                  value={addrInputs[office.id]?.sub ?? ""}
+                  placeholder="e.g. Kingston"
+                  oninput={(e) => setAddrInput(office.id, "sub", (e.target as HTMLInputElement).value)}
+                  onblur={() => saveAddress(office.id)}
+                />
+              </div>
+              <div class="field">
+                <label for="office-country-{office.id}">Country</label>
+                <input id="office-country-{office.id}"
+                  value={addrInputs[office.id]?.country ?? ""}
+                  placeholder="e.g. Jamaica"
+                  oninput={(e) => setAddrInput(office.id, "country", (e.target as HTMLInputElement).value)}
+                  onblur={() => saveAddress(office.id)}
+                />
+              </div>
+              {#if addrSaving[office.id]}
+                <div class="addr-saving">Saving…</div>
+              {/if}
+            </div>
+
             <!-- Hours editor -->
             <h4>Operating Hours</h4>
+            <p class="hours-hint">Check a day to mark it open. Edit times and tab away to save.</p>
             <div class="hours-grid">
               <div class="hours-header">Day</div>
               <div class="hours-header">Open</div>
               <div class="hours-header">Close</div>
-              <div class="hours-header"></div>
 
               {#each DAYS as day}
                 {@const key = `${office.id}-${day}`}
                 {@const isOpen = hasHours(office, day)}
-                <div class="day-label" class:day-open={isOpen}>{day}</div>
-                <input
-                  class="time-input"
-                  type="time"
-                  value={getHoursInput(office.id, day, "open")}
-                  oninput={(e) => setHoursInput(office.id, day, "open", (e.target as HTMLInputElement).value)}
-                />
-                <input
-                  class="time-input"
-                  type="time"
-                  value={getHoursInput(office.id, day, "close")}
-                  oninput={(e) => setHoursInput(office.id, day, "close", (e.target as HTMLInputElement).value)}
-                />
-                <div class="hours-actions">
-                  <button
-                    class="btn-sm"
-                    disabled={hoursSaving[key]}
-                    onclick={() => setHours(office.id, day)}
-                  >Set</button>
-                  {#if isOpen}
-                    <button
-                      class="btn-sm btn-ghost"
-                      disabled={hoursSaving[key]}
-                      onclick={() => closeDay(office.id, day)}
-                    >✕</button>
-                  {/if}
-                </div>
+                <label class="day-label" class:day-open={isOpen}>
+                  <input
+                    type="checkbox"
+                    class="day-checkbox"
+                    checked={isOpen}
+                    disabled={!!hoursSaving[key]}
+                    onchange={(e) => checkDay(office.id, day, (e.target as HTMLInputElement).checked)}
+                  />
+                  {day}
+                  {#if hoursSaving[key]}<span class="saving-indicator"> Saving…</span>{/if}
+                </label>
+                {#if isOpen}
+                  <input
+                    class="time-input"
+                    type="time"
+                    aria-label="Open time for {day}"
+                    value={getHoursInput(office.id, day, "open")}
+                    oninput={(e) => setHoursInput(office.id, day, "open", (e.target as HTMLInputElement).value)}
+                    onblur={() => blurHours(office.id, day)}
+                  />
+                  <input
+                    class="time-input"
+                    type="time"
+                    aria-label="Close time for {day}"
+                    value={getHoursInput(office.id, day, "close")}
+                    oninput={(e) => setHoursInput(office.id, day, "close", (e.target as HTMLInputElement).value)}
+                    onblur={() => blurHours(office.id, day)}
+                  />
+                {:else}
+                  <div></div>
+                  <div></div>
+                {/if}
                 {#if hoursError[key]}
                   <div class="hours-err" style="grid-column:1/-1">{hoursError[key]}</div>
                 {/if}
@@ -339,17 +461,30 @@
   .detail-row .field { flex: 1; }
   .detail-row input { padding: 0.4rem 0.6rem; border: 1px solid #ccc; border-radius: 6px; font-size: 0.9rem; width: 100%; box-sizing: border-box; }
 
+  .office-addr { font-style: italic; }
+  .field-error { font-size: 0.8rem; color: #c0392b; margin: 0 0 0.4rem; }
+  .addr-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.6rem 1rem;
+    margin-bottom: 1rem;
+  }
+  .addr-full { grid-column: 1 / -1; }
+  .addr-saving { grid-column: 1 / -1; font-size: 0.78rem; color: #999; font-style: italic; }
+
+  .hours-hint { font-size: 0.78rem; color: #888; margin: 0 0 0.6rem; }
   .hours-grid {
     display: grid;
-    grid-template-columns: 110px 110px 110px 1fr;
-    gap: 0.35rem;
+    grid-template-columns: 140px 110px 110px;
+    gap: 0.4rem;
     align-items: center;
   }
   .hours-header { font-size: 0.75rem; font-weight: 600; color: #888; text-transform: uppercase; letter-spacing: 0.04em; }
-  .day-label { font-size: 0.85rem; color: #444; }
+  .day-label { display: flex; align-items: center; gap: 0.45rem; font-size: 0.875rem; color: #444; cursor: pointer; user-select: none; }
   .day-label.day-open { font-weight: 600; color: #1a1a2e; }
+  .day-checkbox { cursor: pointer; }
   .time-input { padding: 0.3rem 0.4rem; border: 1px solid #ccc; border-radius: 5px; font-size: 0.85rem; }
-  .hours-actions { display: flex; gap: 0.4rem; }
+  .saving-indicator { font-size: 0.72rem; color: #999; font-style: italic; }
   .hours-err { font-size: 0.78rem; color: #c0392b; padding-left: 2px; }
 
   .btn-primary {
@@ -359,13 +494,6 @@
   .btn-primary:hover:not(:disabled) { background: #2a2a4e; }
   .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
 
-  .btn-sm {
-    padding: 0.25rem 0.6rem; background: #1a1a2e; color: white;
-    border: none; border-radius: 4px; font-size: 0.78rem; cursor: pointer; font-family: system-ui, sans-serif;
-  }
-  .btn-sm:disabled { opacity: 0.4; cursor: not-allowed; }
-  .btn-sm.btn-ghost { background: #eee; color: #555; }
-  .btn-sm.btn-ghost:hover { background: #ddd; }
   .btn-danger-sm {
     padding: 0.35rem 0.75rem; background: white; color: #c0392b;
     border: 1px solid #c0392b; border-radius: 6px; font-size: 0.8rem; cursor: pointer; font-family: system-ui, sans-serif;

@@ -48,7 +48,7 @@ rm -rf ~/.local/share/com.belsouri.app
 
 - **Frontend** (`src/`): Svelte components. Stores in `src/lib/stores/` for shared state. Components should be as stateless as possible.
 - **Backend** (`src-tauri/`): Rust. Uses `rusqlite` for SQLite. Events are append-only. Projections must be deterministic.
-- **IPC**: Tauri commands bridge frontend and backend. All commands use `#[tauri::command(rename_all = "snake_case")]` so the frontend sends snake_case parameter names.
+- **IPC**: Tauri commands bridge frontend and backend. All commands use `#[tauri::command]` (no `rename_all`). Tauri v2 default behavior automatically maps JavaScript camelCase to Rust snake_case. tauri-specta generates camelCase INVOKE calls — do NOT add `rename_all = "snake_case"` which breaks this mapping.
 
 ### Domain-Driven Design
 
@@ -97,18 +97,22 @@ These rules apply even when Tony has said "don't ask for permission" or "run aut
 
 ### Tauri Command Pattern
 
-All Tauri commands must use `rename_all = "snake_case"` so the frontend can send snake_case keys:
+Do NOT use `rename_all` on Tauri commands. Tauri v2 default behavior automatically maps JavaScript camelCase to Rust snake_case. tauri-specta generates camelCase INVOKE calls which rely on this default.
 
 ```rust
-#[tauri::command(rename_all = "snake_case")]
+#[specta::specta]
+#[tauri::command]
 pub fn my_command(state: State<'_, AppState>, entity_id: String) -> Result<(), String> { ... }
 ```
 
-Frontend calls use snake_case to match:
+tauri-specta generates camelCase frontend calls automatically:
 
 ```typescript
-invokeCommand<void>('my_command', { entity_id })
+// Auto-generated in bindings.ts — tauri-specta sends camelCase, Tauri converts to snake_case
+commands.myCommand({ entityId: "..." })
 ```
+
+**CRITICAL**: `rename_all = "snake_case"` BREAKS multi-word parameters. It forces Tauri to expect `entity_id` from JS but tauri-specta sends `entityId`. Multi-word params silently become `None`/null with NO error.
 
 ### DTO Consistency
 

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import "../app.css";
   import { invoke } from "@tauri-apps/api/core";
   import { onMount } from "svelte";
   import { getErrorMessage } from "$lib/utils/api";
@@ -17,10 +18,10 @@
 
 <nav class="app-nav">
   <a href="/" class="brand">Belsouri</a>
-  <a href="/patients" class:active={$page.url.pathname.startsWith("/patients")}>Patients</a>
-  <a href="/staff" class:active={$page.url.pathname.startsWith("/staff")}>Staff</a>
-  <a href="/schedule" class:active={$page.url.pathname.startsWith("/schedule")}>Schedule</a>
-  <a href="/setup" class:active={$page.url.pathname.startsWith("/setup")}>Setup</a>
+  <a href="/patients" class:active={$page.url.pathname.startsWith("/patients")} aria-current={$page.url.pathname.startsWith("/patients") ? "page" : undefined}>Patients</a>
+  <a href="/staff" class:active={$page.url.pathname.startsWith("/staff")} aria-current={$page.url.pathname.startsWith("/staff") ? "page" : undefined}>Staff</a>
+  <a href="/schedule" class:active={$page.url.pathname.startsWith("/schedule")} aria-current={$page.url.pathname.startsWith("/schedule") ? "page" : undefined}>Schedule</a>
+  <a href="/setup" class:active={$page.url.pathname.startsWith("/setup")} aria-current={$page.url.pathname.startsWith("/setup") ? "page" : undefined}>Setup</a>
 </nav>
 
 {@render children()}

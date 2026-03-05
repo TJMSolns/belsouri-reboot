@@ -23,7 +23,7 @@ A previous attempt used Scala 3 + JavaFX but was abandoned due to concerns about
 
 1. **`tauri-specta`** for all Tauri commands -- auto-generates TypeScript bindings from Rust type signatures. No manual DTO synchronization. Build fails if types mismatch.
 
-2. **`rename_all = "snake_case"`** on every `#[tauri::command]` -- eliminates the camelCase/snake_case mismatch that caused runtime errors in belsouri-old.
+2. **No `rename_all` on `#[tauri::command]`** -- Tauri v2 default behavior automatically maps JavaScript camelCase → Rust snake_case. `tauri-specta` generates camelCase INVOKE calls relying on this default. Adding `rename_all = "snake_case"` overrides the default and silently drops all multi-word parameters (they become `None` with no error). Use `pnpm check:ipc` to enforce this mechanically.
 
 3. **Thin Svelte frontend** -- Svelte is a rendering layer only. All business logic, validation, and state management lives in Rust. Minimal boundary surface area.
 

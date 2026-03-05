@@ -43,8 +43,7 @@
   let bookProviderId = $state("");
   let bookProcedureId = $state("");
   let bookStartDate = $state(todayLocal());
-  let bookStartTime = $state("10:00");
-  let bookDuration = $state<number | null>(null);
+  let bookStartTime = $state("");
   let bookError = $state("");
   let bookLoading = $state(false);
   let bookSuccess = $state("");
@@ -52,9 +51,20 @@
   // Patient search results for booking
   let patientSearchResults = $state<typeof patients>([]);
 
-  // Provider roster
+  // View roster (providers scheduled for currently-viewed date/office)
   let providerRoster = $state<ProviderScheduleEntry[]>([]);
   let rosterLoading = $state(false);
+
+  // Book roster: providers scheduled for the *booking* date/office (may differ from view)
+  let bookRoster = $state<ProviderScheduleEntry[]>([]);
+  let bookRosterLoading = $state(false);
+
+  // Time slots available for the selected provider on the booking date
+  let availableSlots = $derived((() => {
+    const entry = bookRoster.find(e => e.provider_id === bookProviderId);
+    if (!entry) return [];
+    return generateTimeSlots(entry.start_time, entry.end_time);
+  })());
 
   // Note form
   let noteAppointmentId = $state("");
@@ -85,6 +95,19 @@
 
   function buildStartTime(date: string, time: string): string {
     return `${date}T${time}:00`;
+  }
+
+  /** Generate HH:MM time slots every 15 minutes between start and end. */
+  function generateTimeSlots(start: string, end: string): string[] {
+    const slots: string[] = [];
+    let [h, m] = start.split(":").map(Number);
+    const [eh, em] = end.split(":").map(Number);
+    while (h * 60 + m < eh * 60 + em) {
+      slots.push(`${h.toString().padStart(2, "0")}:${m.toString().padStart(2, "0")}`);
+      m += 15;
+      if (m >= 60) { h += 1; m -= 60; }
+    }
+    return slots;
   }
 
   function statusBadgeClass(status: string): string {
@@ -144,6 +167,31 @@
     }
   }
 
+  async function loadBookRoster() {
+    if (!bookOfficeId || !bookStartDate) return;
+    // Reuse already-loaded roster if office+date match the view
+    if (bookOfficeId === selectedOfficeId && bookStartDate === selectedDate) {
+      bookRoster = [...providerRoster];
+      return;
+    }
+    bookRosterLoading = true;
+    const res = await commands.getOfficeProviderSchedule(bookOfficeId, bookStartDate);
+    bookRosterLoading = false;
+    if (res.status === "ok") bookRoster = res.data;
+  }
+
+  function onBookProviderChange(providerId: string) {
+    bookProviderId = providerId;
+    // Auto-select first available slot for this provider
+    const entry = bookRoster.find(e => e.provider_id === providerId);
+    if (entry) {
+      const slots = generateTimeSlots(entry.start_time, entry.end_time);
+      bookStartTime = slots[0] ?? "";
+    } else {
+      bookStartTime = "";
+    }
+  }
+
   async function loadCallList() {
     if (!selectedOfficeId) return;
     const res = await commands.getTomorrowsCallList(selectedOfficeId, callListDate);
@@ -194,10 +242,10 @@
   // ── Actions ───────────────────────────────────────────────────────────────
 
   async function doBookAppointment() {
-    if (!bookPatientId || !bookProviderId || !bookProcedureId || !bookOfficeId) {
-      bookError = "Please fill in all required fields and select a patient.";
-      return;
-    }
+    if (!bookPatientId) { bookError = "Select a patient from the search results."; return; }
+    if (!bookProviderId) { bookError = "Select a provider."; return; }
+    if (!bookProcedureId) { bookError = "Select a procedure."; return; }
+    if (!bookOfficeId) { bookError = "Select an office."; return; }
     bookLoading = true;
     bookError = "";
     bookSuccess = "";
@@ -205,17 +253,16 @@
     const startTime = buildStartTime(bookStartDate, bookStartTime);
     const res = await commands.bookAppointment(
       bookOfficeId, bookPatientId, bookProcedureId, bookProviderId,
-      startTime, bookDuration, STAFF_ID,
+      startTime, null, STAFF_ID,
     );
     bookLoading = false;
     if (res.status === "ok") {
-      bookSuccess = `Appointment booked (ID: ${res.data.appointment_id.slice(0, 8)}…)`;
+      bookSuccess = `Appointment booked for ${bookPatientName}.`;
       bookPatientId = "";
       bookPatientName = "";
       bookPatientSearch = "";
       bookProviderId = "";
       bookProcedureId = "";
-      bookDuration = null;
       showBookForm = false;
       await loadSchedule();
     } else {
@@ -291,19 +338,44 @@
       loadProviderRoster();
     }
   });
+
+  // Reload booking roster when booking office or date changes (after form is open)
+  $effect(() => {
+    if (showBookForm && bookOfficeId && bookStartDate) {
+      loadBookRoster();
+    }
+  });
 </script>
 
 <div class="page-wrap">
+  {#if offices.length === 0}
+    <div class="no-offices-banner">
+      No offices configured. Go to <a href="/setup">Setup → Offices</a> to add an office before scheduling.
+    </div>
+  {/if}
+
   <div class="page-header">
     <h1>Schedule</h1>
     <div class="header-controls">
-      <select bind:value={selectedOfficeId} class="select-sm">
+      <label for="office-select" class="sr-only">Select office</label>
+      <select id="office-select" bind:value={selectedOfficeId} class="select-sm">
         {#each offices as o}
           <option value={o.id}>{o.name}</option>
         {/each}
       </select>
-      <input type="date" bind:value={selectedDate} class="date-input" />
-      <button class="btn-primary" onclick={() => { showBookForm = !showBookForm; bookSuccess = ""; }}>
+      <label for="schedule-date" class="sr-only">Select date</label>
+      <input id="schedule-date" type="date" bind:value={selectedDate} class="date-input" />
+      <button class="btn-primary" onclick={() => {
+        if (!showBookForm) {
+          bookOfficeId = selectedOfficeId;
+          bookStartDate = selectedDate;
+          bookRoster = [...providerRoster];
+          bookProviderId = "";
+          bookStartTime = "";
+        }
+        showBookForm = !showBookForm;
+        bookSuccess = "";
+      }}>
         {showBookForm ? "Close" : "+ Book Appointment"}
       </button>
       <button class="btn-secondary" onclick={() => { showCallList = !showCallList; loadCallList(); }}>
@@ -332,77 +404,130 @@
   {#if showBookForm}
     <div class="card book-form">
       <h2>Book Appointment</h2>
-      <div class="form-grid">
-        <label>Office</label>
-        <select bind:value={bookOfficeId} class="select-full">
-          {#each offices as o}<option value={o.id}>{o.name}</option>{/each}
-        </select>
 
-        <label>Patient</label>
-        <div class="patient-search-wrap">
-          <input
-            type="text"
-            bind:value={bookPatientSearch}
-            placeholder="Type name to search…"
-            oninput={searchPatients}
-            class="input-full"
-          />
-          {#if patientSearchResults.length > 0}
-            <ul class="patient-dropdown">
-              {#each patientSearchResults as p}
-                <li>
-                  <button onclick={() => selectPatient(p)} class="dropdown-item">
-                    {p.patient_name}
-                    {#if p.phone}<span class="muted"> · {p.phone}</span>{/if}
-                  </button>
-                </li>
-              {/each}
-            </ul>
-          {/if}
-          {#if bookPatientName && bookPatientId}
-            <div class="selected-patient">Selected: <strong>{bookPatientName}</strong></div>
-          {/if}
+      <!-- Step 1: Date + Office (determines who's available) -->
+      <div class="form-step">
+        <div class="step-label">When &amp; Where</div>
+        <div class="step-fields">
+          <div class="field-group">
+            <label for="book-date">Date</label>
+            <input id="book-date" type="date" bind:value={bookStartDate} class="input-full" />
+          </div>
+          <div class="field-group">
+            <label for="book-office">Office</label>
+            <select id="book-office" bind:value={bookOfficeId} class="select-full">
+              {#each offices as o}<option value={o.id}>{o.name}</option>{/each}
+            </select>
+          </div>
         </div>
-
-        <label>Provider</label>
-        <select bind:value={bookProviderId} class="select-full">
-          <option value="">— Select provider —</option>
-          {#each providers as p}<option value={p.id}>{p.name}</option>{/each}
-        </select>
-
-        <label>Procedure</label>
-        <select bind:value={bookProcedureId} class="select-full">
-          <option value="">— Select procedure —</option>
-          {#each procedures as p}
-            <option value={p.id}>{p.name} ({p.default_duration_minutes} min)</option>
-          {/each}
-        </select>
-
-        <label>Date</label>
-        <input type="date" bind:value={bookStartDate} class="input-full" />
-
-        <label>Start Time</label>
-        <input type="time" bind:value={bookStartTime} step="900" class="input-full" />
-
-        <label>Duration (min)</label>
-        <input
-          type="number"
-          bind:value={bookDuration}
-          placeholder="Defaults to procedure default"
-          min="15" max="240"
-          class="input-full"
-        />
       </div>
 
+      <!-- Step 2: Provider (filtered to who's actually working that day) -->
+      <div class="form-step">
+        <div class="step-label">Provider</div>
+        {#if bookRosterLoading}
+          <p class="muted">Checking who's working on {bookStartDate}…</p>
+        {:else if bookRoster.length === 0}
+          <div class="no-avail-warning">
+            No providers scheduled on {bookStartDate} at {offices.find(o => o.id === bookOfficeId)?.name ?? "this office"}.
+            Set availability in <a href="/setup">Setup → Providers</a>.
+          </div>
+        {:else}
+          <div class="provider-chips">
+            {#each bookRoster as entry}
+              <button
+                class="provider-chip"
+                class:selected={bookProviderId === entry.provider_id}
+                onclick={() => onBookProviderChange(entry.provider_id)}
+              >
+                <span class="chip-name">{entry.provider_name}</span>
+                <span class="chip-hours">{entry.start_time}–{entry.end_time}</span>
+              </button>
+            {/each}
+          </div>
+        {/if}
+      </div>
+
+      <!-- Step 3: Time slot (derived from provider's hours) -->
+      {#if bookProviderId && availableSlots.length > 0}
+        <div class="form-step">
+          <div class="step-label">Time Slot</div>
+          <div class="slot-grid">
+            {#each availableSlots as slot}
+              <button
+                class="slot-btn"
+                class:selected={bookStartTime === slot}
+                onclick={() => (bookStartTime = slot)}
+              >{slot}</button>
+            {/each}
+          </div>
+        </div>
+      {/if}
+
+      <!-- Step 4: Patient -->
+      {#if bookStartTime}
+        <div class="form-step">
+          <div class="step-label">Patient</div>
+          <label for="book-patient" class="sr-only">Search patient by name</label>
+          <div class="patient-search-wrap">
+            <input
+              id="book-patient"
+              type="text"
+              bind:value={bookPatientSearch}
+              placeholder="Type name to search…"
+              oninput={searchPatients}
+              class="input-full"
+              autocomplete="off"
+            />
+            {#if patientSearchResults.length > 0}
+              <ul class="patient-dropdown" role="listbox" aria-label="Patient search results">
+                {#each patientSearchResults as p}
+                  <li role="option" aria-selected={bookPatientId === p.patient_id}>
+                    <button onclick={() => selectPatient(p)} class="dropdown-item">
+                      {p.patient_name}
+                      {#if p.phone}<span class="muted"> · {p.phone}</span>{/if}
+                    </button>
+                  </li>
+                {/each}
+              </ul>
+            {:else if bookPatientSearch.trim().length >= 2 && !bookPatientId}
+              <p class="search-no-results">No patients found. <a href="/patients">Register patient first</a>.</p>
+            {/if}
+            {#if bookPatientName && bookPatientId}
+              <div class="selected-patient">✓ <strong>{bookPatientName}</strong></div>
+            {/if}
+          </div>
+        </div>
+      {/if}
+
+      <!-- Step 5: Procedure -->
+      {#if bookPatientId}
+        <div class="form-step">
+          <div class="step-label">Procedure</div>
+          {#if procedures.length === 0}
+            <p class="field-hint">No procedures set up. Go to <a href="/setup">Setup → Procedure Types</a>.</p>
+          {:else}
+            <label for="book-procedure" class="sr-only">Select procedure</label>
+            <select id="book-procedure" bind:value={bookProcedureId} class="select-full">
+              <option value="">— Select procedure —</option>
+              {#each procedures as p}
+                <option value={p.id}>{p.name} ({p.default_duration_minutes} min)</option>
+              {/each}
+            </select>
+          {/if}
+        </div>
+      {/if}
+
       {#if bookError}
-        <div class="error-msg">{bookError}</div>
+        <div class="error-msg" role="alert">{bookError}</div>
       {/if}
       {#if bookSuccess}
-        <div class="success-msg">{bookSuccess}</div>
+        <div class="success-msg" role="status">{bookSuccess}</div>
       {/if}
 
       <div class="form-actions">
-        <button class="btn-primary" onclick={doBookAppointment} disabled={bookLoading}>
+        <button class="btn-primary" onclick={doBookAppointment}
+          disabled={bookLoading || !bookPatientId || !bookProviderId || !bookProcedureId || !bookStartTime}>
           {bookLoading ? "Booking…" : "Book Appointment"}
         </button>
         <button class="btn-ghost" onclick={() => showBookForm = false}>Cancel</button>
@@ -459,6 +584,7 @@
   {:else if schedule.length === 0}
     <div class="empty-schedule">
       <p>No appointments for {selectedDate}{selectedOfficeId ? ` at ${offices.find((o) => o.id === selectedOfficeId)?.name ?? "selected office"}` : ""}.</p>
+      <p>Click <strong>+ Book Appointment</strong> to schedule one.</p>
     </div>
   {:else}
     <div class="schedule-list">
@@ -467,6 +593,7 @@
           <!-- Header row -->
           <button
             class="appt-header"
+            aria-expanded={expandedId === appt.appointment_id}
             onclick={() => toggleExpand(appt.appointment_id)}
           >
             <span class="appt-time">{formatTime(appt.start_time)}–{formatTime(appt.end_time)}</span>
@@ -589,14 +716,61 @@
     padding: 1.25rem;
     margin-bottom: 1rem;
   }
-  .book-form .form-grid {
-    display: grid;
-    grid-template-columns: 140px 1fr;
-    gap: 0.5rem 1rem;
-    align-items: start;
-    margin-bottom: 0.75rem;
+
+
+  /* Stepped booking form */
+  .form-step {
+    margin-bottom: 1.1rem;
+    padding-bottom: 1.1rem;
+    border-bottom: 1px solid #2a2a40;
   }
-  .book-form label { color: #aaa; font-size: 0.85rem; padding-top: 0.35rem; }
+  .form-step:last-of-type { border-bottom: none; margin-bottom: 0; padding-bottom: 0; }
+  .step-label {
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: #7eb8f7;
+    margin-bottom: 0.55rem;
+  }
+  .step-fields { display: flex; gap: 1rem; flex-wrap: wrap; }
+  .field-group { display: flex; flex-direction: column; gap: 0.3rem; flex: 1; min-width: 140px; }
+  .field-group label { font-size: 0.78rem; color: #aaa; }
+
+  /* Provider chips */
+  .provider-chips { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+  .provider-chip {
+    display: flex; flex-direction: column; gap: 0.1rem;
+    padding: 0.4rem 0.75rem;
+    background: #12122a; border: 1px solid #333; border-radius: 6px;
+    cursor: pointer; text-align: left; color: #bbb;
+    transition: border-color 0.1s, background 0.1s;
+  }
+  .provider-chip:hover { border-color: #4a7abc; background: #1a1a3a; }
+  .provider-chip.selected { border-color: #7eb8f7; background: #1a2a4a; color: #fff; }
+  .chip-name { font-size: 0.875rem; font-weight: 600; }
+  .chip-hours { font-size: 0.75rem; color: #7eb8f7; font-family: monospace; }
+  .provider-chip.selected .chip-hours { color: #a0d4ff; }
+
+  /* Time slot grid */
+  .slot-grid {
+    display: flex; flex-wrap: wrap; gap: 0.35rem;
+  }
+  .slot-btn {
+    padding: 0.3rem 0.55rem;
+    font-size: 0.8rem; font-family: monospace;
+    background: #12122a; border: 1px solid #2a2a40; border-radius: 4px;
+    color: #bbb; cursor: pointer;
+  }
+  .slot-btn:hover { border-color: #4a7abc; color: #e0e0e0; }
+  .slot-btn.selected { background: #1a3a6b; border-color: #7eb8f7; color: #7eb8f7; font-weight: 600; }
+
+  /* No availability warning */
+  .no-avail-warning {
+    background: #2a1a0a; border: 1px solid #6a3a0a; border-radius: 5px;
+    padding: 0.6rem 0.9rem; font-size: 0.82rem; color: #f7a87e;
+  }
+  .no-avail-warning a { color: #f7c87e; }
 
   .patient-search-wrap { position: relative; }
   .patient-dropdown {
@@ -795,6 +969,16 @@
   .success-msg { color: #6bcf7f; font-size: 0.82rem; margin: 0.4rem 0; }
   .muted { color: #666; font-size: 0.85rem; }
   .empty-schedule { padding: 2rem; text-align: center; color: #555; }
+  .no-offices-banner {
+    background: #2a1a0a; border: 1px solid #6a3a0a; color: #f7a87e;
+    border-radius: 6px; padding: 0.75rem 1rem; margin-bottom: 0.75rem; font-size: 0.875rem;
+  }
+  .no-offices-banner a { color: #f7c87e; }
+  .search-no-results { font-size: 0.8rem; color: #888; margin: 0.25rem 0 0; }
+  .search-no-results a { color: #7eb8f7; }
+  .field-hint { font-size: 0.78rem; color: #888; margin: 0; }
+  .field-hint a { color: #7eb8f7; }
+  .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
 
   /* Provider roster bar */
   .roster-bar {

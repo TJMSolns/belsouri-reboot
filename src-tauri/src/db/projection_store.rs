@@ -52,6 +52,11 @@ pub struct OfficeRow {
     pub name: String,
     pub chair_count: u32,
     pub archived: bool,
+    pub address_line_1: Option<String>,
+    pub address_line_2: Option<String>,
+    pub city_town: Option<String>,
+    pub subdivision: Option<String>,
+    pub country: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -246,7 +251,12 @@ impl ProjectionStore {
                 id TEXT PRIMARY KEY,
                 name TEXT NOT NULL,
                 chair_count INTEGER NOT NULL,
-                archived INTEGER NOT NULL DEFAULT 0
+                archived INTEGER NOT NULL DEFAULT 0,
+                address_line_1 TEXT,
+                address_line_2 TEXT,
+                city_town TEXT,
+                subdivision TEXT,
+                country TEXT
             );
             CREATE TABLE IF NOT EXISTS office_hours (
                 office_id TEXT NOT NULL,
@@ -367,6 +377,12 @@ impl ProjectionStore {
             CREATE INDEX IF NOT EXISTS idx_appointment_notes_appt
                 ON appointment_notes(appointment_id);
         ")?;
+        // Migrations for existing databases (ignore "duplicate column" errors)
+        let _ = self.conn.execute_batch("ALTER TABLE offices ADD COLUMN address_line_1 TEXT;");
+        let _ = self.conn.execute_batch("ALTER TABLE offices ADD COLUMN address_line_2 TEXT;");
+        let _ = self.conn.execute_batch("ALTER TABLE offices ADD COLUMN city_town TEXT;");
+        let _ = self.conn.execute_batch("ALTER TABLE offices ADD COLUMN subdivision TEXT;");
+        let _ = self.conn.execute_batch("ALTER TABLE offices ADD COLUMN country TEXT;");
         Ok(())
     }
 
@@ -471,12 +487,32 @@ impl ProjectionStore {
 
     pub fn upsert_office(&self, row: &OfficeRow) -> Result<()> {
         self.conn.execute(
-            "INSERT INTO offices (id, name, chair_count, archived)
-             VALUES (?1, ?2, ?3, ?4)
+            "INSERT INTO offices (id, name, chair_count, archived,
+                 address_line_1, address_line_2, city_town, subdivision, country)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
              ON CONFLICT(id) DO UPDATE SET
                  name = excluded.name, chair_count = excluded.chair_count,
                  archived = excluded.archived",
-            params![row.id, row.name, row.chair_count, row.archived as i32],
+            params![row.id, row.name, row.chair_count, row.archived as i32,
+                    row.address_line_1, row.address_line_2, row.city_town,
+                    row.subdivision, row.country],
+        )?;
+        Ok(())
+    }
+
+    pub fn set_office_address(
+        &self,
+        id: &str,
+        address_line_1: Option<&str>,
+        address_line_2: Option<&str>,
+        city_town: Option<&str>,
+        subdivision: Option<&str>,
+        country: Option<&str>,
+    ) -> Result<()> {
+        self.conn.execute(
+            "UPDATE offices SET address_line_1 = ?2, address_line_2 = ?3,
+             city_town = ?4, subdivision = ?5, country = ?6 WHERE id = ?1",
+            params![id, address_line_1, address_line_2, city_town, subdivision, country],
         )?;
         Ok(())
     }
@@ -501,13 +537,20 @@ impl ProjectionStore {
 
     pub fn get_office(&self, id: &str) -> Result<Option<OfficeRow>> {
         let r: SqlResult<OfficeRow> = self.conn.query_row(
-            "SELECT id, name, chair_count, archived FROM offices WHERE id = ?1",
+            "SELECT id, name, chair_count, archived,
+                    address_line_1, address_line_2, city_town, subdivision, country
+             FROM offices WHERE id = ?1",
             params![id],
             |row| Ok(OfficeRow {
                 id: row.get(0)?,
                 name: row.get(1)?,
                 chair_count: row.get::<_, i64>(2)? as u32,
                 archived: row.get::<_, i32>(3)? != 0,
+                address_line_1: row.get(4)?,
+                address_line_2: row.get(5)?,
+                city_town: row.get(6)?,
+                subdivision: row.get(7)?,
+                country: row.get(8)?,
             }),
         );
         match r {
@@ -519,13 +562,20 @@ impl ProjectionStore {
 
     pub fn list_offices(&self) -> Result<Vec<OfficeRow>> {
         let mut stmt = self.conn.prepare(
-            "SELECT id, name, chair_count, archived FROM offices ORDER BY name ASC"
+            "SELECT id, name, chair_count, archived,
+                    address_line_1, address_line_2, city_town, subdivision, country
+             FROM offices ORDER BY name ASC"
         )?;
         let rows = stmt.query_map([], |row| Ok(OfficeRow {
             id: row.get(0)?,
             name: row.get(1)?,
             chair_count: row.get::<_, i64>(2)? as u32,
             archived: row.get::<_, i32>(3)? != 0,
+            address_line_1: row.get(4)?,
+            address_line_2: row.get(5)?,
+            city_town: row.get(6)?,
+            subdivision: row.get(7)?,
+            country: row.get(8)?,
         }))?.collect::<SqlResult<Vec<_>>>()?;
         Ok(rows)
     }

@@ -125,6 +125,21 @@
     } else { actionError = { ...actionError, [providerId]: r.error }; }
   }
 
+  async function checkAvail(pid: string, oid: string, day: string, checked: boolean) {
+    if (!checked) { await clearAvail(pid, oid, day); return; }
+    const existing = availInputs[pid] ?? {};
+    const byOffice = existing[oid] ?? {};
+    availInputs = { ...availInputs, [pid]: { ...existing, [oid]: { ...byOffice, [day]: { start: "08:00", end: "17:00" } } } };
+    const r = await commands.setProviderAvailability(pid, oid, day, "08:00", "17:00");
+    if (r.status === "ok") providers = providers.map((p) => p.id === pid ? r.data : p);
+    else actionError = { ...actionError, [pid]: r.error };
+  }
+
+  async function blurAvail(pid: string, oid: string, day: string) {
+    const inp = availInputs[pid]?.[oid]?.[day];
+    if (inp?.start && inp?.end) await setAvail(pid, oid, day);
+  }
+
   function getAvailInput(pid: string, oid: string, day: string, field: "start" | "end"): string {
     return availInputs[pid]?.[oid]?.[day]?.[field] ?? "";
   }
@@ -186,12 +201,12 @@
       {#if registerError}<p class="error">{registerError}</p>{/if}
       <div class="row">
         <div class="field">
-          <label>Name</label>
-          <input bind:value={newName} placeholder="Dr. Brown" />
+          <label for="new-provider-name">Name</label>
+          <input id="new-provider-name" bind:value={newName} placeholder="Dr. Brown" />
         </div>
         <div class="field" style="max-width:150px">
-          <label>Type</label>
-          <select bind:value={newType}>
+          <label for="new-provider-type">Type</label>
+          <select id="new-provider-type" bind:value={newType}>
             {#each PROVIDER_TYPES as t}<option>{t}</option>{/each}
           </select>
         </div>
@@ -212,6 +227,7 @@
     {#each providers as provider (provider.id)}
       <div class="provider-card" class:archived={provider.archived}>
         <div class="provider-row" role="button" tabindex="0"
+          aria-expanded={expandedId === provider.id}
           onclick={() => toggleExpand(provider.id)}
           onkeydown={(e) => e.key === "Enter" && toggleExpand(provider.id)}>
           <div class="provider-info">
@@ -236,16 +252,16 @@
             <!-- Name / Type -->
             <div class="detail-row">
               <div class="field">
-                <label>Name</label>
-                <input
+                <label for="prov-name-{provider.id}">Name</label>
+                <input id="prov-name-{provider.id}"
                   value={provider.name}
                   onblur={(e) => rename(provider, (e.target as HTMLInputElement).value)}
                   onkeydown={(e) => e.key === "Enter" && rename(provider, (e.target as HTMLInputElement).value)}
                 />
               </div>
               <div class="field" style="max-width:150px">
-                <label>Type</label>
-                <select
+                <label for="prov-type-{provider.id}">Type</label>
+                <select id="prov-type-{provider.id}"
                   value={provider.provider_type}
                   onchange={(e) => changeType(provider, (e.target as HTMLSelectElement).value)}
                 >
@@ -282,6 +298,7 @@
             <!-- Availability per office -->
             {#if provider.office_ids.length > 0}
               <h4>Weekly Availability</h4>
+              <p class="hours-hint">Check a day to mark availability. Edit times and tab away to save.</p>
               {#each provider.office_ids as oid}
                 <div class="avail-section">
                   <div class="avail-office-label">{officeName(oid)}</div>
@@ -289,24 +306,30 @@
                     <div class="hours-header">Day</div>
                     <div class="hours-header">Start</div>
                     <div class="hours-header">End</div>
-                    <div class="hours-header"></div>
                     {#each DAYS as day}
                       {@const active = hasAvail(provider, oid, day)}
-                      <div class="day-label" class:day-open={active}>{day}</div>
-                      <input class="time-input" type="time"
-                        value={getAvailInput(provider.id, oid, day, "start")}
-                        oninput={(e) => setAvailInput(provider.id, oid, day, "start", (e.target as HTMLInputElement).value)}
-                      />
-                      <input class="time-input" type="time"
-                        value={getAvailInput(provider.id, oid, day, "end")}
-                        oninput={(e) => setAvailInput(provider.id, oid, day, "end", (e.target as HTMLInputElement).value)}
-                      />
-                      <div class="hours-actions">
-                        <button class="btn-sm" onclick={() => setAvail(provider.id, oid, day)}>Set</button>
-                        {#if active}
-                          <button class="btn-sm btn-ghost" onclick={() => clearAvail(provider.id, oid, day)}>✕</button>
-                        {/if}
-                      </div>
+                      <label class="day-label" class:day-open={active}>
+                        <input type="checkbox" class="day-checkbox" checked={active}
+                          onchange={(e) => checkAvail(provider.id, oid, day, (e.target as HTMLInputElement).checked)} />
+                        {day}
+                      </label>
+                      {#if active}
+                        <input class="time-input" type="time"
+                          aria-label="Start time for {day} at {officeName(oid)}"
+                          value={getAvailInput(provider.id, oid, day, "start")}
+                          oninput={(e) => setAvailInput(provider.id, oid, day, "start", (e.target as HTMLInputElement).value)}
+                          onblur={() => blurAvail(provider.id, oid, day)}
+                        />
+                        <input class="time-input" type="time"
+                          aria-label="End time for {day} at {officeName(oid)}"
+                          value={getAvailInput(provider.id, oid, day, "end")}
+                          oninput={(e) => setAvailInput(provider.id, oid, day, "end", (e.target as HTMLInputElement).value)}
+                          onblur={() => blurAvail(provider.id, oid, day)}
+                        />
+                      {:else}
+                        <div></div>
+                        <div></div>
+                      {/if}
                     {/each}
                   </div>
                 </div>
@@ -327,10 +350,13 @@
               </div>
             {/if}
             <form class="exc-form" onsubmit={(e) => { e.preventDefault(); addException(provider.id); }}>
-              <input type="date" bind:value={excForm[provider.id].start} />
-              <span>→</span>
-              <input type="date" bind:value={excForm[provider.id].end} />
-              <input placeholder="Reason (optional)" bind:value={excForm[provider.id].reason} style="flex:1" />
+              <label for="exc-start-{provider.id}" class="sr-only">Exception start date</label>
+              <input id="exc-start-{provider.id}" type="date" bind:value={excForm[provider.id].start} />
+              <span aria-hidden="true">→</span>
+              <label for="exc-end-{provider.id}" class="sr-only">Exception end date</label>
+              <input id="exc-end-{provider.id}" type="date" bind:value={excForm[provider.id].end} />
+              <label for="exc-reason-{provider.id}" class="sr-only">Reason (optional)</label>
+              <input id="exc-reason-{provider.id}" placeholder="Reason (optional)" bind:value={excForm[provider.id].reason} style="flex:1" />
               <button type="submit" class="btn-sm">Add</button>
             </form>
           </div>
@@ -341,6 +367,7 @@
 </div>
 
 <style>
+  .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
   .section-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
   h2 { margin: 0; font-size: 1.1rem; color: #222; }
   h4 { margin: 1rem 0 0.4rem; font-size: 0.82rem; color: #555; text-transform: uppercase; letter-spacing: 0.04em; }
@@ -392,14 +419,15 @@
   .chip-add { background: white; border: 1px dashed #aaa; color: #555; cursor: pointer; font-family: system-ui, sans-serif; }
   .chip-add:hover { border-color: #1a1a2e; color: #1a1a2e; }
 
+  .hours-hint { font-size: 0.78rem; color: #888; margin: 0 0 0.5rem; }
   .avail-section { margin-bottom: 0.75rem; }
   .avail-office-label { font-size: 0.82rem; font-weight: 700; color: #444; margin-bottom: 0.35rem; }
-  .hours-grid { display: grid; grid-template-columns: 110px 110px 110px 1fr; gap: 0.3rem; align-items: center; }
+  .hours-grid { display: grid; grid-template-columns: 140px 110px 110px; gap: 0.35rem; align-items: center; }
   .hours-header { font-size: 0.72rem; font-weight: 600; color: #888; text-transform: uppercase; letter-spacing: 0.04em; }
-  .day-label { font-size: 0.85rem; color: #666; }
+  .day-label { display: flex; align-items: center; gap: 0.45rem; font-size: 0.875rem; color: #666; cursor: pointer; user-select: none; }
   .day-label.day-open { font-weight: 600; color: #1a1a2e; }
+  .day-checkbox { cursor: pointer; }
   .time-input { padding: 0.28rem 0.4rem; border: 1px solid #ccc; border-radius: 5px; font-size: 0.84rem; }
-  .hours-actions { display: flex; gap: 0.35rem; }
 
   .exception-list { display: flex; flex-direction: column; gap: 0.4rem; margin-bottom: 0.5rem; }
   .exception-item { display: flex; align-items: center; gap: 0.5rem; font-size: 0.85rem; }

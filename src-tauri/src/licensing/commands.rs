@@ -24,7 +24,7 @@ use crate::projections;
 /// - Records a successful validation timestamp
 /// - Rebuilds projections and returns current license status
 #[specta::specta]
-#[tauri::command(rename_all = "snake_case")]
+#[tauri::command]
 pub fn startup_license_check(state: State<'_, AppState>) -> Result<LicenseStatusDto, String> {
     let events = state.events.lock().map_err(|_| "event store lock error".to_string())?;
     let projections = state.projections.lock().map_err(|_| "projection store lock error".to_string())?;
@@ -132,7 +132,7 @@ pub fn startup_license_check(state: State<'_, AppState>) -> Result<LicenseStatus
 
 /// Returns the current license status (rebuilds projection with current time).
 #[specta::specta]
-#[tauri::command(rename_all = "snake_case")]
+#[tauri::command]
 pub fn get_license_status(state: State<'_, AppState>) -> Result<LicenseStatusDto, String> {
     let events = state.events.lock().map_err(|_| "event store lock error".to_string())?;
     let projections = state.projections.lock().map_err(|_| "projection store lock error".to_string())?;
@@ -143,7 +143,7 @@ pub fn get_license_status(state: State<'_, AppState>) -> Result<LicenseStatusDto
 
 /// Returns the current practice_id, or None if identity not yet established.
 #[specta::specta]
-#[tauri::command(rename_all = "snake_case")]
+#[tauri::command]
 pub fn get_practice_id(state: State<'_, AppState>) -> Result<Option<String>, String> {
     let events = state.events.lock().map_err(|_| "event store lock error".to_string())?;
     let projections = state.projections.lock().map_err(|_| "projection store lock error".to_string())?;
@@ -153,7 +153,7 @@ pub fn get_practice_id(state: State<'_, AppState>) -> Result<Option<String>, Str
 
 /// Activates a paid license key. Validates the key, checks practice_id match, appends LicenseIssued.
 #[specta::specta]
-#[tauri::command(rename_all = "snake_case")]
+#[tauri::command]
 pub fn activate_license(
     state: State<'_, AppState>,
     license_key: String,

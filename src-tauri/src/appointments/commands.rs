@@ -118,7 +118,7 @@ fn check_booking_constraints(
 // ── Commands ──────────────────────────────────────────────────────────────────
 
 #[specta::specta]
-#[tauri::command(rename_all = "snake_case")]
+#[tauri::command]
 pub async fn book_appointment(
     state: State<'_, AppState>,
     office_id: String,
@@ -170,7 +170,7 @@ pub async fn book_appointment(
 }
 
 #[specta::specta]
-#[tauri::command(rename_all = "snake_case")]
+#[tauri::command]
 pub async fn reschedule_appointment(
     state: State<'_, AppState>,
     appointment_id: String,
@@ -233,7 +233,7 @@ pub async fn reschedule_appointment(
 }
 
 #[specta::specta]
-#[tauri::command(rename_all = "snake_case")]
+#[tauri::command]
 pub async fn cancel_appointment(
     state: State<'_, AppState>,
     appointment_id: String,
@@ -268,7 +268,7 @@ pub async fn cancel_appointment(
 }
 
 #[specta::specta]
-#[tauri::command(rename_all = "snake_case")]
+#[tauri::command]
 pub async fn complete_appointment(
     state: State<'_, AppState>,
     appointment_id: String,
@@ -301,7 +301,7 @@ pub async fn complete_appointment(
 }
 
 #[specta::specta]
-#[tauri::command(rename_all = "snake_case")]
+#[tauri::command]
 pub async fn mark_appointment_no_show(
     state: State<'_, AppState>,
     appointment_id: String,
@@ -334,7 +334,7 @@ pub async fn mark_appointment_no_show(
 }
 
 #[specta::specta]
-#[tauri::command(rename_all = "snake_case")]
+#[tauri::command]
 pub async fn add_appointment_note(
     state: State<'_, AppState>,
     appointment_id: String,
@@ -375,7 +375,7 @@ pub async fn add_appointment_note(
 }
 
 #[specta::specta]
-#[tauri::command(rename_all = "snake_case")]
+#[tauri::command]
 pub async fn get_schedule(
     state: State<'_, AppState>,
     office_id: String,
@@ -389,7 +389,7 @@ pub async fn get_schedule(
 }
 
 #[specta::specta]
-#[tauri::command(rename_all = "snake_case")]
+#[tauri::command]
 pub async fn get_appointment(
     state: State<'_, AppState>,
     appointment_id: String,
@@ -411,7 +411,7 @@ pub async fn get_appointment(
 }
 
 #[specta::specta]
-#[tauri::command(rename_all = "snake_case")]
+#[tauri::command]
 pub async fn get_tomorrows_call_list(
     state: State<'_, AppState>,
     office_id: String,

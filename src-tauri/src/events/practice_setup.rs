@@ -9,6 +9,7 @@ pub const OFFICE_RENAMED: &str = "OfficeRenamed";
 pub const OFFICE_CHAIR_COUNT_UPDATED: &str = "OfficeChairCountUpdated";
 pub const OFFICE_HOURS_SET: &str = "OfficeHoursSet";
 pub const OFFICE_DAY_CLOSED: &str = "OfficeDayClosed";
+pub const OFFICE_ADDRESS_SET: &str = "OfficeAddressSet";
 pub const OFFICE_ARCHIVED: &str = "OfficeArchived";
 
 pub const PROVIDER_REGISTERED: &str = "ProviderRegistered";
@@ -76,6 +77,16 @@ pub struct OfficeHoursSetPayload {
 pub struct OfficeDayClosedPayload {
     pub id: String,
     pub day_of_week: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct OfficeAddressSetPayload {
+    pub id: String,
+    pub address_line_1: Option<String>,
+    pub address_line_2: Option<String>,
+    pub city_town: Option<String>,
+    pub subdivision: Option<String>,
+    pub country: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -194,6 +205,7 @@ pub const ALL_EVENT_TYPES: &[&str] = &[
     OFFICE_CHAIR_COUNT_UPDATED,
     OFFICE_HOURS_SET,
     OFFICE_DAY_CLOSED,
+    OFFICE_ADDRESS_SET,
     OFFICE_ARCHIVED,
     PROVIDER_REGISTERED,
     PROVIDER_RENAMED,

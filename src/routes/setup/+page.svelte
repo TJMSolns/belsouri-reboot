@@ -20,11 +20,13 @@
     <h1>Practice Setup</h1>
   </header>
 
-  <div class="tab-bar">
+  <div class="tab-bar" role="tablist" aria-label="Setup sections">
     {#each tabs as tab}
       <button
         class="tab-btn"
         class:active={activeTab === tab.id}
+        role="tab"
+        aria-selected={activeTab === tab.id}
         onclick={() => (activeTab = tab.id)}
       >
         {tab.label}

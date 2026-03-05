@@ -22,6 +22,11 @@ Chair count is the key capacity constraint: the number of concurrent appointment
 | chair_count | u32 | Yes | Physical treatment stations. Minimum 1. |
 | hours | Map<DayOfWeek, TimeRange> | No | Per-day operating hours. Days not in map = closed. |
 | archived | bool | Yes | Default false. Archived offices hidden from active lists. |
+| address_line_1 | String? | No | Street address |
+| address_line_2 | String? | No | Suite, floor, etc. |
+| city_town | String? | No | City or town |
+| subdivision | String? | No | Parish, state, or province |
+| country | String? | No | Country name |
 
 ### Value Objects
 
@@ -40,6 +45,7 @@ Chair count is the key capacity constraint: the number of concurrent appointment
 | **OfficeChairCountUpdated** | id, new_chair_count | Admin changes chair capacity |
 | **OfficeHoursSet** | id, day_of_week, open_time, close_time | Admin sets hours for a specific day |
 | **OfficeDayClosed** | id, day_of_week | Admin marks a day as closed (removes hours) |
+| **OfficeAddressSet** | id, address_line_1, address_line_2, city_town, subdivision, country | Admin sets the physical address |
 | **OfficeArchived** | id | Admin decommissions the office |
 
 ---
@@ -53,6 +59,7 @@ Chair count is the key capacity constraint: the number of concurrent appointment
 | UpdateChairCount | office_id, new_chair_count | OfficeChairCountUpdated | chair_count >= 1. Warn (don't block) if reducing below concurrent appointment count. |
 | SetOfficeHours | office_id, day, open_time, close_time | OfficeHoursSet | valid day, close > open, valid HH:MM format |
 | CloseOfficeDay | office_id, day | OfficeDayClosed | valid day |
+| SetOfficeAddress | office_id, address fields | OfficeAddressSet | office exists, not archived |
 | ArchiveOffice | office_id | OfficeArchived | not already archived |
 
 ---
@@ -73,7 +80,7 @@ Chair count is the key capacity constraint: the number of concurrent appointment
 ```
 stateDiagram-v2
     [*] --> Active : CreateOffice
-    Active --> Active : RenameOffice / UpdateChairCount / SetOfficeHours / CloseOfficeDay
+    Active --> Active : RenameOffice / UpdateChairCount / SetOfficeHours / CloseOfficeDay / SetOfficeAddress
     Active --> Archived : ArchiveOffice
 ```
 
@@ -93,7 +100,7 @@ The Office aggregate provides two constraints that the Scheduling context enforc
 - **Granular events**: Separate events for rename, chair count, hours (not a single OfficeUpdated). Better audit trail, less storage per event.
 - **Warn on chair reduction**: If reducing chair count below existing concurrent appointments, system warns but allows the change. Existing appointments are not cancelled.
 - **Duplicate names allowed**: Soft warning but not blocked. Practices may legitimately have similar names.
-- **No address field on Office (MVP)**: Practice address covers the business identity. Per-office addresses are a future enhancement for multi-location practices.
+- **Per-office addresses**: Each office has its own optional address. Essential for multi-location practices where each site has a different physical location.
 
 ---
 

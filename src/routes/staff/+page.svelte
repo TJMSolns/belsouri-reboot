@@ -225,8 +225,8 @@
       <p class="hint">No Practice Manager exists yet. Enter your name to become the first Practice Manager.</p>
       {#if claimError}<p class="error">{claimError}</p>{/if}
       <div class="field">
-        <label>Name</label>
-        <input bind:value={claimName} placeholder="Dr. Spence" />
+        <label for="claim-name">Name</label>
+        <input id="claim-name" bind:value={claimName} placeholder="Dr. Spence" />
       </div>
       <div class="form-actions">
         <button class="btn-primary" onclick={claim} disabled={claiming}>
@@ -243,28 +243,28 @@
       {#if regError}<p class="error">{regError}</p>{/if}
       <div class="form-row">
         <div class="field">
-          <label>Name *</label>
-          <input bind:value={regName} placeholder="Maria Brown" />
+          <label for="reg-name">Name *</label>
+          <input id="reg-name" bind:value={regName} placeholder="Maria Brown" />
         </div>
         <div class="field" style="max-width:140px">
-          <label>Initial Role</label>
-          <select bind:value={regRole}>
+          <label for="reg-role">Initial Role</label>
+          <select id="reg-role" bind:value={regRole}>
             {#each ROLES as r}<option>{r}</option>{/each}
           </select>
         </div>
       </div>
       <div class="form-row">
         <div class="field">
-          <label>Phone</label>
-          <input bind:value={regPhone} placeholder="+1-876-555-0100" />
+          <label for="reg-phone">Phone</label>
+          <input id="reg-phone" bind:value={regPhone} placeholder="+1-876-555-0100" />
         </div>
         <div class="field">
-          <label>Email</label>
-          <input type="email" bind:value={regEmail} />
+          <label for="reg-email">Email</label>
+          <input id="reg-email" type="email" bind:value={regEmail} />
         </div>
         <div class="field" style="max-width:140px">
-          <label>Preferred Channel</label>
-          <select bind:value={regChannel}>
+          <label for="reg-channel">Preferred Channel</label>
+          <select id="reg-channel" bind:value={regChannel}>
             {#each CHANNELS as c}<option value={c}>{c || "—"}</option>{/each}
           </select>
         </div>
@@ -279,7 +279,13 @@
 
   <!-- Active staff list -->
   {#if activeStaff().length === 0 && !showClaim && !showRegister}
-    <p class="empty">No staff registered yet.</p>
+    <p class="empty">
+      {#if !hasActivePM}
+        No staff yet. Click <strong>Claim Practice Manager Role</strong> to get started.
+      {:else}
+        No staff registered yet. Click <strong>+ Register Staff</strong> to add a staff member.
+      {/if}
+    </p>
   {/if}
 
   <div class="staff-list">
@@ -289,6 +295,7 @@
           class="staff-row"
           role="button"
           tabindex="0"
+          aria-expanded={expandedId === sm.staff_member_id}
           onclick={() => toggleExpand(sm.staff_member_id)}
           onkeydown={(e) => e.key === "Enter" && toggleExpand(sm.staff_member_id)}
         >
@@ -333,7 +340,8 @@
                 {/each}
               </div>
               <div class="add-role-row">
-                <select bind:value={roleToAdd}>
+                <label for="add-role-{sm.staff_member_id}" class="sr-only">Select role to add</label>
+                <select id="add-role-{sm.staff_member_id}" bind:value={roleToAdd}>
                   {#each ROLES.filter((r) => !sm.roles.includes(r)) as r}<option>{r}</option>{/each}
                 </select>
                 <button class="btn-sm" onclick={() => doAssignRole(sm.staff_member_id)} disabled={roleAdding}>
@@ -359,7 +367,8 @@
                 </div>
               {:else if pinSection === "set"}
                 <div class="pin-form">
-                  <input type="password" inputmode="numeric" maxlength="6" placeholder="4–6 digits" bind:value={newPin} class="pin-input" />
+                  <label for="pin-new-{sm.staff_member_id}" class="sr-only">New PIN (4–6 digits)</label>
+                  <input id="pin-new-{sm.staff_member_id}" type="password" inputmode="numeric" maxlength="6" placeholder="4–6 digits" bind:value={newPin} class="pin-input" />
                   <button class="btn-sm" onclick={() => doSetPin(sm.staff_member_id)} disabled={pinSaving}>
                     {pinSaving ? "Saving…" : "Save"}
                   </button>
@@ -367,8 +376,10 @@
                 </div>
               {:else if pinSection === "change"}
                 <div class="pin-form">
-                  <input type="password" inputmode="numeric" maxlength="6" placeholder="Current PIN" bind:value={currentPin} class="pin-input" />
-                  <input type="password" inputmode="numeric" maxlength="6" placeholder="New PIN" bind:value={newPin} class="pin-input" />
+                  <label for="pin-current-{sm.staff_member_id}" class="sr-only">Current PIN</label>
+                  <input id="pin-current-{sm.staff_member_id}" type="password" inputmode="numeric" maxlength="6" placeholder="Current PIN" bind:value={currentPin} class="pin-input" />
+                  <label for="pin-new-change-{sm.staff_member_id}" class="sr-only">New PIN</label>
+                  <input id="pin-new-change-{sm.staff_member_id}" type="password" inputmode="numeric" maxlength="6" placeholder="New PIN" bind:value={newPin} class="pin-input" />
                   <button class="btn-sm" onclick={() => doChangePin(sm.staff_member_id)} disabled={pinSaving}>
                     {pinSaving ? "Saving…" : "Save"}
                   </button>
@@ -379,7 +390,8 @@
               <!-- PIN verify (identity switch test) -->
               {#if sm.has_pin}
                 <div class="verify-row">
-                  <input type="password" inputmode="numeric" maxlength="6" placeholder="Verify PIN" bind:value={verifyPin} class="pin-input" />
+                  <label for="pin-verify-{sm.staff_member_id}" class="sr-only">Verify PIN</label>
+                  <input id="pin-verify-{sm.staff_member_id}" type="password" inputmode="numeric" maxlength="6" placeholder="Verify PIN" bind:value={verifyPin} class="pin-input" />
                   <button class="btn-sm btn-ghost" onclick={() => doVerifyPin(sm.staff_member_id)} disabled={verifying}>
                     {verifying ? "…" : "Verify"}
                   </button>
@@ -422,6 +434,7 @@
 </div>
 
 <style>
+  .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
   .page { padding: 1.5rem 2rem; max-width: 800px; }
   .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem; }
   h1 { margin: 0; font-size: 1.25rem; color: #222; font-family: system-ui, sans-serif; }

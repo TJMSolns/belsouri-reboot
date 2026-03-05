@@ -1,7 +1,7 @@
 use tauri::State;
 use uuid::Uuid;
 use crate::app_state::AppState;
-use crate::db::{ProviderRow, ProcedureTypeRow};
+use crate::db::{OfficeRow, OfficeHoursRow, ProviderRow, ProcedureTypeRow};
 use crate::events::practice_setup::*;
 use crate::practice_setup::service::{self, AvailabilityWindow};
 use crate::practice_setup::types::*;
@@ -28,6 +28,35 @@ fn do_rebuild(state: &State<'_, AppState>) -> Result<(), String> {
     rebuild(&events, &proj)
 }
 
+fn build_office_dto(row: OfficeRow, hours: Vec<OfficeHoursRow>) -> OfficeDto {
+    OfficeDto {
+        id: row.id,
+        name: row.name,
+        chair_count: row.chair_count,
+        hours: hours.into_iter().map(|h| OfficeHoursDto {
+            day_of_week: h.day_of_week,
+            open_time: h.open_time,
+            close_time: h.close_time,
+        }).collect(),
+        archived: row.archived,
+        address_line_1: row.address_line_1,
+        address_line_2: row.address_line_2,
+        city_town: row.city_town,
+        subdivision: row.subdivision,
+        country: row.country,
+    }
+}
+
+fn build_office_dto_from_proj(
+    proj: &std::sync::MutexGuard<'_, crate::db::ProjectionStore>,
+    office_id: &str,
+) -> Result<OfficeDto, String> {
+    let row = proj.get_office(office_id).map_err(|e| e.to_string())?
+        .ok_or_else(|| format!("Office '{}' not found", office_id))?;
+    let hours = proj.list_office_hours(office_id).map_err(|e| e.to_string())?;
+    Ok(build_office_dto(row, hours))
+}
+
 fn procedure_type_to_dto(row: &ProcedureTypeRow) -> ProcedureTypeDto {
     ProcedureTypeDto {
         id: row.id.clone(),
@@ -41,7 +70,7 @@ fn procedure_type_to_dto(row: &ProcedureTypeRow) -> ProcedureTypeDto {
 // ── Practice commands ─────────────────────────────────────────────────────────
 
 #[specta::specta]
-#[tauri::command(rename_all = "snake_case")]
+#[tauri::command]
 pub async fn update_practice_details(
     state: State<'_, AppState>,
     name: String,
@@ -89,7 +118,7 @@ pub async fn update_practice_details(
 }
 
 #[specta::specta]
-#[tauri::command(rename_all = "snake_case")]
+#[tauri::command]
 pub async fn get_practice(state: State<'_, AppState>) -> Result<Option<PracticeDto>, String> {
     do_rebuild(&state)?;
     let proj = state.projections.lock().map_err(|e| e.to_string())?;
@@ -110,7 +139,7 @@ pub async fn get_practice(state: State<'_, AppState>) -> Result<Option<PracticeD
 // ── Office commands ───────────────────────────────────────────────────────────
 
 #[specta::specta]
-#[tauri::command(rename_all = "snake_case")]
+#[tauri::command]
 pub async fn create_office(
     state: State<'_, AppState>,
     name: String,
@@ -128,24 +157,11 @@ pub async fn create_office(
     )?;
     do_rebuild(&state)?;
     let proj = state.projections.lock().map_err(|e| e.to_string())?;
-    let row = proj.get_office(&id).map_err(|e| e.to_string())?
-        .ok_or_else(|| "Office not found after create".to_string())?;
-    let hours = proj.list_office_hours(&id).map_err(|e| e.to_string())?;
-    Ok(OfficeDto {
-        id: row.id,
-        name: row.name,
-        chair_count: row.chair_count,
-        hours: hours.into_iter().map(|h| OfficeHoursDto {
-            day_of_week: h.day_of_week,
-            open_time: h.open_time,
-            close_time: h.close_time,
-        }).collect(),
-        archived: row.archived,
-    })
+    build_office_dto_from_proj(&proj, &id)
 }
 
 #[specta::specta]
-#[tauri::command(rename_all = "snake_case")]
+#[tauri::command]
 pub async fn rename_office(
     state: State<'_, AppState>,
     office_id: String,
@@ -170,23 +186,11 @@ pub async fn rename_office(
     )?;
     do_rebuild(&state)?;
     let proj = state.projections.lock().map_err(|e| e.to_string())?;
-    let row = proj.get_office(&office_id).map_err(|e| e.to_string())?.unwrap();
-    let hours = proj.list_office_hours(&office_id).map_err(|e| e.to_string())?;
-    Ok(OfficeDto {
-        id: row.id,
-        name: row.name,
-        chair_count: row.chair_count,
-        hours: hours.into_iter().map(|h| OfficeHoursDto {
-            day_of_week: h.day_of_week,
-            open_time: h.open_time,
-            close_time: h.close_time,
-        }).collect(),
-        archived: row.archived,
-    })
+    build_office_dto_from_proj(&proj, &office_id)
 }
 
 #[specta::specta]
-#[tauri::command(rename_all = "snake_case")]
+#[tauri::command]
 pub async fn update_office_chair_count(
     state: State<'_, AppState>,
     office_id: String,
@@ -211,23 +215,11 @@ pub async fn update_office_chair_count(
     )?;
     do_rebuild(&state)?;
     let proj = state.projections.lock().map_err(|e| e.to_string())?;
-    let row = proj.get_office(&office_id).map_err(|e| e.to_string())?.unwrap();
-    let hours = proj.list_office_hours(&office_id).map_err(|e| e.to_string())?;
-    Ok(OfficeDto {
-        id: row.id,
-        name: row.name,
-        chair_count: row.chair_count,
-        hours: hours.into_iter().map(|h| OfficeHoursDto {
-            day_of_week: h.day_of_week,
-            open_time: h.open_time,
-            close_time: h.close_time,
-        }).collect(),
-        archived: row.archived,
-    })
+    build_office_dto_from_proj(&proj, &office_id)
 }
 
 #[specta::specta]
-#[tauri::command(rename_all = "snake_case")]
+#[tauri::command]
 pub async fn set_office_hours(
     state: State<'_, AppState>,
     office_id: String,
@@ -262,23 +254,11 @@ pub async fn set_office_hours(
     )?;
     do_rebuild(&state)?;
     let proj = state.projections.lock().map_err(|e| e.to_string())?;
-    let row = proj.get_office(&office_id).map_err(|e| e.to_string())?.unwrap();
-    let hours = proj.list_office_hours(&office_id).map_err(|e| e.to_string())?;
-    Ok(OfficeDto {
-        id: row.id,
-        name: row.name,
-        chair_count: row.chair_count,
-        hours: hours.into_iter().map(|h| OfficeHoursDto {
-            day_of_week: h.day_of_week,
-            open_time: h.open_time,
-            close_time: h.close_time,
-        }).collect(),
-        archived: row.archived,
-    })
+    build_office_dto_from_proj(&proj, &office_id)
 }
 
 #[specta::specta]
-#[tauri::command(rename_all = "snake_case")]
+#[tauri::command]
 pub async fn close_office_day(
     state: State<'_, AppState>,
     office_id: String,
@@ -300,23 +280,11 @@ pub async fn close_office_day(
     )?;
     do_rebuild(&state)?;
     let proj = state.projections.lock().map_err(|e| e.to_string())?;
-    let row = proj.get_office(&office_id).map_err(|e| e.to_string())?.unwrap();
-    let hours = proj.list_office_hours(&office_id).map_err(|e| e.to_string())?;
-    Ok(OfficeDto {
-        id: row.id,
-        name: row.name,
-        chair_count: row.chair_count,
-        hours: hours.into_iter().map(|h| OfficeHoursDto {
-            day_of_week: h.day_of_week,
-            open_time: h.open_time,
-            close_time: h.close_time,
-        }).collect(),
-        archived: row.archived,
-    })
+    build_office_dto_from_proj(&proj, &office_id)
 }
 
 #[specta::specta]
-#[tauri::command(rename_all = "snake_case")]
+#[tauri::command]
 pub async fn archive_office(
     state: State<'_, AppState>,
     office_id: String,
@@ -334,73 +302,77 @@ pub async fn archive_office(
     append_event(&state, &stream_id, OFFICE_ARCHIVED, &OfficeArchivedPayload { id: office_id.clone() })?;
     do_rebuild(&state)?;
     let proj = state.projections.lock().map_err(|e| e.to_string())?;
-    let row = proj.get_office(&office_id).map_err(|e| e.to_string())?.unwrap();
-    let hours = proj.list_office_hours(&office_id).map_err(|e| e.to_string())?;
-    Ok(OfficeDto {
-        id: row.id,
-        name: row.name,
-        chair_count: row.chair_count,
-        hours: hours.into_iter().map(|h| OfficeHoursDto {
-            day_of_week: h.day_of_week,
-            open_time: h.open_time,
-            close_time: h.close_time,
-        }).collect(),
-        archived: row.archived,
-    })
+    build_office_dto_from_proj(&proj, &office_id)
 }
 
 #[specta::specta]
-#[tauri::command(rename_all = "snake_case")]
+#[tauri::command]
 pub async fn list_offices(state: State<'_, AppState>) -> Result<Vec<OfficeDto>, String> {
     do_rebuild(&state)?;
     let proj = state.projections.lock().map_err(|e| e.to_string())?;
     let office_rows = proj.list_offices().map_err(|e| e.to_string())?;
     let mut result = Vec::with_capacity(office_rows.len());
-    for row in &office_rows {
+    for row in office_rows {
         let hours = proj.list_office_hours(&row.id).map_err(|e| e.to_string())?;
-        result.push(OfficeDto {
-            id: row.id.clone(),
-            name: row.name.clone(),
-            chair_count: row.chair_count,
-            hours: hours.into_iter().map(|h| OfficeHoursDto {
-                day_of_week: h.day_of_week,
-                open_time: h.open_time,
-                close_time: h.close_time,
-            }).collect(),
-            archived: row.archived,
-        });
+        result.push(build_office_dto(row, hours));
     }
     Ok(result)
 }
 
 #[specta::specta]
-#[tauri::command(rename_all = "snake_case")]
+#[tauri::command]
 pub async fn get_office(
     state: State<'_, AppState>,
     office_id: String,
 ) -> Result<OfficeDto, String> {
     do_rebuild(&state)?;
     let proj = state.projections.lock().map_err(|e| e.to_string())?;
-    let row = proj.get_office(&office_id).map_err(|e| e.to_string())?
-        .ok_or_else(|| format!("Office '{}' not found", office_id))?;
-    let hours = proj.list_office_hours(&office_id).map_err(|e| e.to_string())?;
-    Ok(OfficeDto {
-        id: row.id,
-        name: row.name,
-        chair_count: row.chair_count,
-        hours: hours.into_iter().map(|h| OfficeHoursDto {
-            day_of_week: h.day_of_week,
-            open_time: h.open_time,
-            close_time: h.close_time,
-        }).collect(),
-        archived: row.archived,
-    })
+    build_office_dto_from_proj(&proj, &office_id)
+}
+
+#[specta::specta]
+#[tauri::command]
+pub async fn set_office_address(
+    state: State<'_, AppState>,
+    office_id: String,
+    address_line_1: Option<String>,
+    address_line_2: Option<String>,
+    city_town: Option<String>,
+    subdivision: Option<String>,
+    country: Option<String>,
+) -> Result<OfficeDto, String> {
+    do_rebuild(&state)?;
+    {
+        let proj = state.projections.lock().map_err(|e| e.to_string())?;
+        let row = proj.get_office(&office_id).map_err(|e| e.to_string())?
+            .ok_or_else(|| format!("Office '{}' not found", office_id))?;
+        if row.archived {
+            return Err(format!("Office '{}' is archived", office_id));
+        }
+    }
+    let stream_id = format!("office:{office_id}");
+    append_event(
+        &state,
+        &stream_id,
+        OFFICE_ADDRESS_SET,
+        &OfficeAddressSetPayload {
+            id: office_id.clone(),
+            address_line_1,
+            address_line_2,
+            city_town,
+            subdivision,
+            country,
+        },
+    )?;
+    do_rebuild(&state)?;
+    let proj = state.projections.lock().map_err(|e| e.to_string())?;
+    build_office_dto_from_proj(&proj, &office_id)
 }
 
 // ── Provider commands ─────────────────────────────────────────────────────────
 
 #[specta::specta]
-#[tauri::command(rename_all = "snake_case")]
+#[tauri::command]
 pub async fn register_provider(
     state: State<'_, AppState>,
     name: String,
@@ -432,7 +404,7 @@ pub async fn register_provider(
 }
 
 #[specta::specta]
-#[tauri::command(rename_all = "snake_case")]
+#[tauri::command]
 pub async fn rename_provider(
     state: State<'_, AppState>,
     provider_id: String,
@@ -462,7 +434,7 @@ pub async fn rename_provider(
 }
 
 #[specta::specta]
-#[tauri::command(rename_all = "snake_case")]
+#[tauri::command]
 pub async fn change_provider_type(
     state: State<'_, AppState>,
     provider_id: String,
@@ -492,7 +464,7 @@ pub async fn change_provider_type(
 }
 
 #[specta::specta]
-#[tauri::command(rename_all = "snake_case")]
+#[tauri::command]
 pub async fn assign_provider_to_office(
     state: State<'_, AppState>,
     provider_id: String,
@@ -530,7 +502,7 @@ pub async fn assign_provider_to_office(
 }
 
 #[specta::specta]
-#[tauri::command(rename_all = "snake_case")]
+#[tauri::command]
 pub async fn remove_provider_from_office(
     state: State<'_, AppState>,
     provider_id: String,
@@ -581,7 +553,7 @@ pub async fn remove_provider_from_office(
 }
 
 #[specta::specta]
-#[tauri::command(rename_all = "snake_case")]
+#[tauri::command]
 pub async fn set_provider_availability(
     state: State<'_, AppState>,
     provider_id: String,
@@ -645,7 +617,7 @@ pub async fn set_provider_availability(
 }
 
 #[specta::specta]
-#[tauri::command(rename_all = "snake_case")]
+#[tauri::command]
 pub async fn clear_provider_availability(
     state: State<'_, AppState>,
     provider_id: String,
@@ -683,7 +655,7 @@ pub async fn clear_provider_availability(
 }
 
 #[specta::specta]
-#[tauri::command(rename_all = "snake_case")]
+#[tauri::command]
 pub async fn set_provider_exception(
     state: State<'_, AppState>,
     provider_id: String,
@@ -722,7 +694,7 @@ pub async fn set_provider_exception(
 }
 
 #[specta::specta]
-#[tauri::command(rename_all = "snake_case")]
+#[tauri::command]
 pub async fn remove_provider_exception(
     state: State<'_, AppState>,
     provider_id: String,
@@ -759,7 +731,7 @@ pub async fn remove_provider_exception(
 }
 
 #[specta::specta]
-#[tauri::command(rename_all = "snake_case")]
+#[tauri::command]
 pub async fn archive_provider(
     state: State<'_, AppState>,
     provider_id: String,
@@ -787,7 +759,7 @@ pub async fn archive_provider(
 }
 
 #[specta::specta]
-#[tauri::command(rename_all = "snake_case")]
+#[tauri::command]
 pub async fn unarchive_provider(
     state: State<'_, AppState>,
     provider_id: String,
@@ -815,7 +787,7 @@ pub async fn unarchive_provider(
 }
 
 #[specta::specta]
-#[tauri::command(rename_all = "snake_case")]
+#[tauri::command]
 pub async fn list_providers(state: State<'_, AppState>) -> Result<Vec<ProviderDto>, String> {
     do_rebuild(&state)?;
     let proj = state.projections.lock().map_err(|e| e.to_string())?;
@@ -828,7 +800,7 @@ pub async fn list_providers(state: State<'_, AppState>) -> Result<Vec<ProviderDt
 }
 
 #[specta::specta]
-#[tauri::command(rename_all = "snake_case")]
+#[tauri::command]
 pub async fn get_provider(
     state: State<'_, AppState>,
     provider_id: String,
@@ -870,7 +842,7 @@ fn build_provider_dto_from_proj(
 // ── ProcedureType commands ────────────────────────────────────────────────────
 
 #[specta::specta]
-#[tauri::command(rename_all = "snake_case")]
+#[tauri::command]
 pub async fn define_procedure_type(
     state: State<'_, AppState>,
     name: String,
@@ -900,7 +872,7 @@ pub async fn define_procedure_type(
 }
 
 #[specta::specta]
-#[tauri::command(rename_all = "snake_case")]
+#[tauri::command]
 pub async fn update_procedure_type(
     state: State<'_, AppState>,
     id: String,
@@ -940,7 +912,7 @@ pub async fn update_procedure_type(
 }
 
 #[specta::specta]
-#[tauri::command(rename_all = "snake_case")]
+#[tauri::command]
 pub async fn deactivate_procedure_type(
     state: State<'_, AppState>,
     id: String,
@@ -963,7 +935,7 @@ pub async fn deactivate_procedure_type(
 }
 
 #[specta::specta]
-#[tauri::command(rename_all = "snake_case")]
+#[tauri::command]
 pub async fn reactivate_procedure_type(
     state: State<'_, AppState>,
     id: String,
@@ -986,7 +958,7 @@ pub async fn reactivate_procedure_type(
 }
 
 #[specta::specta]
-#[tauri::command(rename_all = "snake_case")]
+#[tauri::command]
 pub async fn seed_default_procedure_types(state: State<'_, AppState>) -> Result<Vec<ProcedureTypeDto>, String> {
     let defaults = [
         ("Consultation", "Consult", 30u32),
@@ -1020,7 +992,7 @@ pub async fn seed_default_procedure_types(state: State<'_, AppState>) -> Result<
 }
 
 #[specta::specta]
-#[tauri::command(rename_all = "snake_case")]
+#[tauri::command]
 pub async fn list_procedure_types(state: State<'_, AppState>) -> Result<Vec<ProcedureTypeDto>, String> {
     do_rebuild(&state)?;
     let proj = state.projections.lock().map_err(|e| e.to_string())?;

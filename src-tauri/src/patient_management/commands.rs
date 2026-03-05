@@ -48,7 +48,7 @@ fn note_row_to_dto(row: PatientNoteRow) -> PatientNoteDto {
 
 // ── Commands ──────────────────────────────────────────────────────────────────
 
-#[tauri::command(rename_all = "snake_case")]
+#[tauri::command]
 #[specta::specta]
 pub fn register_patient(
     state: State<'_, AppState>,
@@ -123,7 +123,7 @@ pub fn register_patient(
     })
 }
 
-#[tauri::command(rename_all = "snake_case")]
+#[tauri::command]
 #[specta::specta]
 pub fn update_patient_demographics(
     state: State<'_, AppState>,
@@ -180,7 +180,7 @@ pub fn update_patient_demographics(
     Ok(row_to_dto(row))
 }
 
-#[tauri::command(rename_all = "snake_case")]
+#[tauri::command]
 #[specta::specta]
 pub fn update_patient_contact_info(
     state: State<'_, AppState>,
@@ -226,7 +226,7 @@ pub fn update_patient_contact_info(
     Ok(row_to_dto(row))
 }
 
-#[tauri::command(rename_all = "snake_case")]
+#[tauri::command]
 #[specta::specta]
 pub fn add_patient_note(
     state: State<'_, AppState>,
@@ -274,7 +274,7 @@ pub fn add_patient_note(
     Ok(note_row_to_dto(note))
 }
 
-#[tauri::command(rename_all = "snake_case")]
+#[tauri::command]
 #[specta::specta]
 pub fn archive_patient(
     state: State<'_, AppState>,
@@ -311,7 +311,7 @@ pub fn archive_patient(
     Ok(row_to_dto(row))
 }
 
-#[tauri::command(rename_all = "snake_case")]
+#[tauri::command]
 #[specta::specta]
 pub fn unarchive_patient(
     state: State<'_, AppState>,
@@ -348,7 +348,7 @@ pub fn unarchive_patient(
     Ok(row_to_dto(row))
 }
 
-#[tauri::command(rename_all = "snake_case")]
+#[tauri::command]
 #[specta::specta]
 pub fn search_patients(
     state: State<'_, AppState>,
@@ -368,7 +368,7 @@ pub fn search_patients(
     Ok(rows.into_iter().map(row_to_dto).collect())
 }
 
-#[tauri::command(rename_all = "snake_case")]
+#[tauri::command]
 #[specta::specta]
 pub fn get_patient(
     state: State<'_, AppState>,

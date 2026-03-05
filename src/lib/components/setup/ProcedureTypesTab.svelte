@@ -119,18 +119,18 @@
       {#if defineError}<p class="error">{defineError}</p>{/if}
       <div class="row">
         <div class="field">
-          <label>Name</label>
-          <input bind:value={newName} placeholder="e.g. Root Canal" />
+          <label for="proc-name">Name</label>
+          <input id="proc-name" bind:value={newName} placeholder="e.g. Root Canal" />
         </div>
         <div class="field" style="max-width:150px">
-          <label>Category</label>
-          <select bind:value={newCategory}>
+          <label for="proc-category">Category</label>
+          <select id="proc-category" bind:value={newCategory}>
             {#each CATEGORIES as c}<option>{c}</option>{/each}
           </select>
         </div>
         <div class="field" style="max-width:100px">
-          <label>Duration (min)</label>
-          <input type="number" min="15" max="240" bind:value={newDuration} />
+          <label for="proc-duration">Duration (min)</label>
+          <input id="proc-duration" type="number" min="15" max="240" bind:value={newDuration} />
         </div>
         <div class="field" style="justify-content:flex-end; padding-top:1.4rem">
           <button type="submit" class="btn-primary" disabled={defining}>

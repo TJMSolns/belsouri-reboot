@@ -9,7 +9,7 @@ use super::types::{ProviderAvailabilityResult, ProviderScheduleEntry};
 /// date: "YYYY-MM-DD", time: "HH:MM"
 /// Returns {available, reason} where reason is null when available is true.
 #[specta::specta]
-#[tauri::command(rename_all = "snake_case")]
+#[tauri::command]
 pub fn query_provider_availability(
     state: State<'_, AppState>,
     provider_id: String,
@@ -68,7 +68,7 @@ pub fn query_provider_availability(
 /// date: "YYYY-MM-DD". Returns empty list if date is more than 90 days from today.
 /// Each entry includes provider_id, provider_name, start_time, end_time (availability window for the day).
 #[specta::specta]
-#[tauri::command(rename_all = "snake_case")]
+#[tauri::command]
 pub fn get_office_provider_schedule(
     state: State<'_, AppState>,
     office_id: String,

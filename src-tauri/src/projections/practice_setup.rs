@@ -53,6 +53,11 @@ fn apply_event(proj: &ProjectionStore, event: &crate::db::StoredEvent) -> Result
                 name: p.name,
                 chair_count: p.chair_count,
                 archived: false,
+                address_line_1: None,
+                address_line_2: None,
+                city_town: None,
+                subdivision: None,
+                country: None,
             }).map_err(|e| e.to_string())?;
         }
         OFFICE_RENAMED => {
@@ -71,6 +76,17 @@ fn apply_event(proj: &ProjectionStore, event: &crate::db::StoredEvent) -> Result
         OFFICE_DAY_CLOSED => {
             let p: OfficeDayClosedPayload = parse(&event.payload, OFFICE_DAY_CLOSED)?;
             proj.delete_office_hours(&p.id, &p.day_of_week).map_err(|e| e.to_string())?;
+        }
+        OFFICE_ADDRESS_SET => {
+            let p: OfficeAddressSetPayload = parse(&event.payload, OFFICE_ADDRESS_SET)?;
+            proj.set_office_address(
+                &p.id,
+                p.address_line_1.as_deref(),
+                p.address_line_2.as_deref(),
+                p.city_town.as_deref(),
+                p.subdivision.as_deref(),
+                p.country.as_deref(),
+            ).map_err(|e| e.to_string())?;
         }
         OFFICE_ARCHIVED => {
             let p: OfficeArchivedPayload = parse(&event.payload, OFFICE_ARCHIVED)?;

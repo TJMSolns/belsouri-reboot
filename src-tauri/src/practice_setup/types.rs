@@ -21,6 +21,11 @@ pub struct OfficeDto {
     pub chair_count: u32,
     pub hours: Vec<OfficeHoursDto>,
     pub archived: bool,
+    pub address_line_1: Option<String>,
+    pub address_line_2: Option<String>,
+    pub city_town: Option<String>,
+    pub subdivision: Option<String>,
+    pub country: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
