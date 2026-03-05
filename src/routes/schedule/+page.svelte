@@ -2,7 +2,7 @@
   import { commands } from "$lib/bindings";
   import type {
     AppointmentDto, AppointmentWithNotesDto, CallListEntryDto,
-    ProviderScheduleEntry, OfficeDto, ProviderDto,
+    ProviderScheduleEntry, OfficeDto, ProviderDto, StaffShiftDto, StaffMemberDto,
   } from "$lib/bindings";
   import { getErrorMessage } from "$lib/utils/api";
   import { toast } from "$lib/stores/toast";
@@ -52,6 +52,23 @@
   // ── Provider grid visibility (SCH-2) ──────────────────────────────────────
 
   let showAllProviders = $state(false);
+
+  // ── Roster tab (SCH-5) ────────────────────────────────────────────────────
+
+  let scheduleView = $state<"grid" | "roster">("grid");
+  let allStaff = $state<StaffMemberDto[]>([]);
+  let shiftRoster = $state<StaffShiftDto[]>([]);
+  let rosterLoading = $state(false);
+  let showPlanShift = $state(false);
+  let planShiftStaffId = $state("");
+  let planShiftOfficeId = $state("");
+  let planShiftDate = $state(todayLocal());
+  let planShiftStart = $state("09:00");
+  let planShiftEnd = $state("17:00");
+  let planShiftRole = $state("");
+  let planShiftLoading = $state(false);
+  let planShiftError = $state("");
+  let cancellingShiftId = $state<string | null>(null);
 
   // ── Book drawer ───────────────────────────────────────────────────────────
 
@@ -241,23 +258,57 @@
     return map[status] ?? "appt-booked";
   }
 
+  function getWeekStart(date: string): string {
+    const d = new Date(date + "T12:00:00");
+    const day = d.getDay(); // 0=Sun
+    const diff = day === 0 ? -6 : 1 - day;
+    d.setDate(d.getDate() + diff);
+    return d.toISOString().slice(0, 10);
+  }
+
+  function getWeekDays(weekStart: string): string[] {
+    const days: string[] = [];
+    for (let i = 0; i < 7; i++) {
+      days.push(addDays(weekStart, i));
+    }
+    return days;
+  }
+
+  function formatWeekRange(weekStart: string): string {
+    const weekEnd = addDays(weekStart, 6);
+    const startD = new Date(weekStart + "T12:00:00");
+    const endD = new Date(weekEnd + "T12:00:00");
+    return `${startD.toLocaleDateString("en-JM", { month: "short", day: "numeric" })} – ${endD.toLocaleDateString("en-JM", { month: "short", day: "numeric", year: "numeric" })}`;
+  }
+
+  function dayAbbr(date: string): string {
+    return new Date(date + "T12:00:00").toLocaleDateString("en-US", { weekday: "short" });
+  }
+
+  function dayNum(date: string): string {
+    return new Date(date + "T12:00:00").getDate().toString();
+  }
+
   // ── Data loading ──────────────────────────────────────────────────────────
 
   async function loadSetupData() {
-    const [officeRes, procRes, provRes] = await Promise.all([
+    const [officeRes, procRes, provRes, staffRes] = await Promise.all([
       commands.listOffices(),
       commands.listProcedureTypes(),
       commands.listProviders(),
+      commands.listStaffMembers(),
     ]);
     if (officeRes.status === "ok") {
       offices = officeRes.data.filter((o) => !o.archived);
       if (!selectedOfficeId && offices.length > 0) {
         selectedOfficeId = offices[0].id;
         bookOfficeId = offices[0].id;
+        planShiftOfficeId = offices[0].id;
       }
     }
     if (procRes.status === "ok") procedures = procRes.data.filter((p) => p.is_active);
     if (provRes.status === "ok") allProviders = provRes.data;
+    if (staffRes.status === "ok") allStaff = staffRes.data.filter((s) => !s.archived);
   }
 
   async function loadGrid() {
@@ -289,6 +340,56 @@
     if (!selectedOfficeId) return;
     const res = await commands.getTomorrowsCallList(selectedOfficeId, callListDate);
     if (res.status === "ok") callList = res.data;
+  }
+
+  async function loadRoster() {
+    rosterLoading = true;
+    const weekStart = getWeekStart(selectedDate);
+    const res = await commands.getShiftRoster(weekStart, null);
+    rosterLoading = false;
+    if (res.status === "ok") shiftRoster = res.data;
+    else toast.error(getErrorMessage(res.error));
+  }
+
+  async function doPlanShift() {
+    if (!planShiftStaffId) { planShiftError = "Select a staff member."; return; }
+    if (!planShiftOfficeId) { planShiftError = "Select an office."; return; }
+    if (!planShiftRole.trim()) { planShiftError = "Enter a role for this shift."; return; }
+    planShiftLoading = true;
+    planShiftError = "";
+    const staffMember = allStaff.find((s) => s.staff_member_id === planShiftStaffId);
+    const res = await commands.planStaffShift(
+      planShiftStaffId, planShiftOfficeId, planShiftDate,
+      planShiftStart, planShiftEnd, planShiftRole, STAFF_ID,
+    );
+    planShiftLoading = false;
+    if (res.status === "ok") {
+      showPlanShift = false;
+      const staffName = staffMember?.name ?? "Staff member";
+      toast.success(`Shift planned for ${staffName} on ${formatDisplayDate(planShiftDate)} (${planShiftStart}–${planShiftEnd}).`);
+      await loadRoster();
+    } else {
+      planShiftError = getErrorMessage(res.error);
+    }
+  }
+
+  async function doCancelShift(shift: StaffShiftDto) {
+    const ok = await confirm({
+      title: "Cancel shift",
+      message: `Cancel ${shift.staff_name}'s shift on ${formatDisplayDate(shift.date)} (${shift.start_time}–${shift.end_time})?`,
+      confirmLabel: "Cancel shift",
+      destructive: true,
+    });
+    if (!ok) return;
+    cancellingShiftId = shift.shift_id;
+    const res = await commands.cancelStaffShift(shift.shift_id, null, STAFF_ID);
+    cancellingShiftId = null;
+    if (res.status === "ok") {
+      toast.success(`${shift.staff_name}'s shift on ${formatDisplayDate(shift.date)} cancelled.`);
+      await loadRoster();
+    } else {
+      toast.error(getErrorMessage(res.error));
+    }
   }
 
   // ── Detail drawer ─────────────────────────────────────────────────────────
@@ -568,6 +669,20 @@
 
   $effect(() => {
     if (showReschedule && reschedOfficeId && reschedDate) loadReschedRoster();
+  });
+
+  $effect(() => {
+    if (scheduleView === "roster" && selectedDate) loadRoster();
+  });
+
+  // Pre-fill planShiftRole when staff changes
+  $effect(() => {
+    if (planShiftStaffId) {
+      const s = allStaff.find((m) => m.staff_member_id === planShiftStaffId);
+      if (s && s.roles.length > 0) {
+        planShiftRole = s.roles[0];
+      }
+    }
   });
 </script>
 
@@ -911,19 +1026,52 @@
   <div class="page-header">
     <h1 class="page-title">Schedule</h1>
     <div class="header-actions">
-      <button
-        class="btn btn-ghost btn-sm"
-        onclick={() => { showCallList = !showCallList; if (showCallList) loadCallList(); }}
-      >
-        {showCallList ? "Hide call list" : "Call list"}
-      </button>
-      <button
-        class="btn btn-primary"
-        onclick={() => openBookDrawer()}
-        disabled={!selectedOfficeId}
-      >
-        + Book appointment
-      </button>
+      <!-- View switcher -->
+      <div class="view-tabs" role="tablist" aria-label="Schedule view">
+        <button
+          class="view-tab"
+          class:active={scheduleView === "grid"}
+          role="tab"
+          aria-selected={scheduleView === "grid"}
+          onclick={() => (scheduleView = "grid")}
+        >
+          <svg viewBox="0 0 24 24" stroke-width="1.75" stroke="currentColor" fill="none" aria-hidden="true" class="icon-sm"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+          Schedule
+        </button>
+        <button
+          class="view-tab"
+          class:active={scheduleView === "roster"}
+          role="tab"
+          aria-selected={scheduleView === "roster"}
+          onclick={() => (scheduleView = "roster")}
+        >
+          <svg viewBox="0 0 24 24" stroke-width="1.75" stroke="currentColor" fill="none" aria-hidden="true" class="icon-sm"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+          Roster
+        </button>
+      </div>
+      {#if scheduleView === "grid"}
+        <button
+          class="btn btn-ghost btn-sm"
+          onclick={() => { showCallList = !showCallList; if (showCallList) loadCallList(); }}
+        >
+          {showCallList ? "Hide call list" : "Call list"}
+        </button>
+        <button
+          class="btn btn-primary"
+          onclick={() => openBookDrawer()}
+          disabled={!selectedOfficeId}
+        >
+          + Book appointment
+        </button>
+      {:else}
+        <button
+          class="btn btn-primary"
+          onclick={() => { showPlanShift = true; planShiftError = ""; planShiftDate = selectedDate; if (allStaff.length > 0 && !planShiftStaffId) planShiftStaffId = allStaff[0].staff_member_id; if (offices.length > 0 && !planShiftOfficeId) planShiftOfficeId = offices[0].id; }}
+          disabled={allStaff.length === 0 || offices.length === 0}
+        >
+          + Plan shift
+        </button>
+      {/if}
     </div>
   </div>
 
@@ -933,7 +1081,183 @@
       <p class="empty-state-title">No offices configured</p>
       <p class="empty-state-message">Go to <a href="/setup">Setup → Offices</a> to add an office.</p>
     </div>
+  {:else if scheduleView === "roster"}
+    <!-- ══ ROSTER VIEW ══ -->
+    <div class="date-nav">
+      <button class="btn btn-ghost btn-icon btn-sm" onclick={() => (selectedDate = addDays(getWeekStart(selectedDate), -7))} title="Previous week" aria-label="Previous week">«</button>
+      <span class="date-display">{formatWeekRange(getWeekStart(selectedDate))}</span>
+      <button class="btn btn-ghost btn-icon btn-sm" onclick={() => (selectedDate = addDays(getWeekStart(selectedDate), 7))} title="Next week" aria-label="Next week">»</button>
+      <button class="btn btn-ghost btn-sm" onclick={() => (selectedDate = todayLocal())}>This week</button>
+    </div>
+
+    {#if showPlanShift}
+      <!-- Plan shift form panel -->
+      <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
+      <div class="drawer-overlay" onclick={() => (showPlanShift = false)} aria-hidden="true"></div>
+      <div class="drawer" role="dialog" aria-modal="true" aria-labelledby="plan-shift-title">
+        <div class="drawer-header">
+          <h2 class="drawer-title" id="plan-shift-title">Plan shift</h2>
+          <button class="btn btn-ghost btn-icon btn-sm" onclick={() => (showPlanShift = false)} aria-label="Close plan shift form">
+            <svg viewBox="0 0 24 24" stroke-width="1.75" stroke="currentColor" fill="none" aria-hidden="true" class="icon-sm"><path d="M18 6 6 18M6 6l12 12"/></svg>
+          </button>
+        </div>
+        <div class="drawer-body">
+          <div class="form-field">
+            <label class="field-label" for="ps-staff">Staff member</label>
+            <select id="ps-staff" bind:value={planShiftStaffId} onchange={() => { const s = allStaff.find(m => m.staff_member_id === planShiftStaffId); if (s && s.roles.length > 0) planShiftRole = s.roles[0]; else planShiftRole = ""; }}>
+              <option value="">— Select staff member —</option>
+              {#each allStaff as s}
+                <option value={s.staff_member_id}>{s.name} ({s.roles.join(", ")})</option>
+              {/each}
+            </select>
+          </div>
+          <div class="form-field">
+            <label class="field-label" for="ps-office">Office</label>
+            <select id="ps-office" bind:value={planShiftOfficeId}>
+              {#each offices as o}
+                <option value={o.id}>{o.name}</option>
+              {/each}
+            </select>
+          </div>
+          <div class="book-row">
+            <div class="form-field" style="flex:1">
+              <label class="field-label" for="ps-date">Date</label>
+              <input id="ps-date" type="date" bind:value={planShiftDate} />
+            </div>
+          </div>
+          <div class="book-row">
+            <div class="form-field" style="flex:1">
+              <label class="field-label" for="ps-start">Start time</label>
+              <input id="ps-start" type="time" bind:value={planShiftStart} />
+            </div>
+            <div class="form-field" style="flex:1">
+              <label class="field-label" for="ps-end">End time</label>
+              <input id="ps-end" type="time" bind:value={planShiftEnd} />
+            </div>
+          </div>
+          <div class="form-field">
+            <label class="field-label" for="ps-role">Role for this shift</label>
+            {#if planShiftStaffId}
+              {@const staffMember = allStaff.find((s) => s.staff_member_id === planShiftStaffId)}
+              {#if staffMember && staffMember.roles.length > 0}
+                <select id="ps-role" bind:value={planShiftRole}>
+                  {#each staffMember.roles as r}
+                    <option value={r}>{r}</option>
+                  {/each}
+                </select>
+              {:else}
+                <input id="ps-role" type="text" bind:value={planShiftRole} placeholder="e.g. Staff" />
+              {/if}
+            {:else}
+              <input id="ps-role" type="text" bind:value={planShiftRole} placeholder="Select a staff member first" disabled />
+            {/if}
+          </div>
+          {#if planShiftError}
+            <div class="field-error" role="alert">
+              <svg viewBox="0 0 24 24" stroke-width="1.75" stroke="currentColor" fill="none" aria-hidden="true" class="icon-sm"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+              {planShiftError}
+            </div>
+          {/if}
+        </div>
+        <div class="drawer-footer">
+          <button class="btn btn-ghost" onclick={() => (showPlanShift = false)}>Cancel</button>
+          <button
+            class="btn btn-primary"
+            onclick={doPlanShift}
+            disabled={planShiftLoading || !planShiftStaffId || !planShiftOfficeId || !planShiftRole.trim()}
+          >
+            {#if planShiftLoading}
+              <span class="spinner" aria-hidden="true"></span><span class="sr-only">Saving</span>
+            {:else}
+              <svg viewBox="0 0 24 24" stroke-width="1.75" stroke="currentColor" fill="none" aria-hidden="true" class="icon-sm"><path d="M12 5v14M5 12h14"/></svg>
+              Plan shift
+            {/if}
+          </button>
+        </div>
+      </div>
+    {/if}
+
+    {#if rosterLoading}
+      <div class="load-row" style="padding: 2rem; justify-content:center;">
+        <div class="spinner"></div>
+        <span class="text-muted text-sm">Loading roster…</span>
+      </div>
+    {:else}
+      {@const weekStart = getWeekStart(selectedDate)}
+      {@const weekDays = getWeekDays(weekStart)}
+      {@const activeStaff = allStaff.filter((s) => !s.archived)}
+
+      {#if activeStaff.length === 0}
+        <div class="empty-state">
+          <svg viewBox="0 0 24 24" stroke-width="1.75" stroke="currentColor" fill="none" aria-hidden="true" class="empty-state-icon-svg"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
+          <p class="empty-state-title">No staff members</p>
+          <p class="empty-state-message">Register staff members in <a href="/staff">Staff</a> to plan shifts.</p>
+        </div>
+      {:else}
+        <div class="roster-table-wrap">
+          <table class="roster-table" aria-label="Staff shift roster">
+            <thead>
+              <tr>
+                <th class="roster-name-col">Staff member</th>
+                {#each weekDays as day}
+                  <th class="roster-day-col" class:roster-today={day === todayLocal()}>
+                    <span class="roster-day-abbr">{dayAbbr(day)}</span>
+                    <span class="roster-day-num">{dayNum(day)}</span>
+                  </th>
+                {/each}
+              </tr>
+            </thead>
+            <tbody>
+              {#each activeStaff as member}
+                {@const memberShifts = shiftRoster.filter((s) => s.staff_member_id === member.staff_member_id)}
+                <tr>
+                  <td class="roster-name-col">
+                    <span class="roster-staff-name">{member.name}</span>
+                    <span class="roster-staff-roles text-muted text-xs">{member.roles.join(", ")}</span>
+                  </td>
+                  {#each weekDays as day}
+                    {@const dayShifts = memberShifts.filter((s) => s.date === day)}
+                    <td class="roster-day-col" class:roster-today={day === todayLocal()}>
+                      {#each dayShifts as shift}
+                        <div class="shift-cell" class:shift-cancelled={shift.cancelled}>
+                          <span class="shift-times">
+                            {#if shift.cancelled}
+                              <svg viewBox="0 0 24 24" stroke-width="1.75" stroke="currentColor" fill="none" aria-hidden="true" class="icon-xs shift-cancelled-icon"><path d="M18 6 6 18M6 6l12 12"/></svg>
+                            {:else}
+                              <svg viewBox="0 0 24 24" stroke-width="1.75" stroke="currentColor" fill="none" aria-hidden="true" class="icon-xs shift-active-icon"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                            {/if}
+                            {shift.start_time}–{shift.end_time}
+                          </span>
+                          <span class="shift-role">{shift.role}</span>
+                          {#if !shift.cancelled}
+                            <button
+                              class="shift-cancel-btn"
+                              onclick={() => doCancelShift(shift)}
+                              disabled={cancellingShiftId === shift.shift_id}
+                              aria-label="Cancel shift for {shift.staff_name} on {shift.date}"
+                              title="Cancel shift"
+                            >
+                              {#if cancellingShiftId === shift.shift_id}
+                                <span class="spinner spinner-xs" aria-hidden="true"></span>
+                              {:else}
+                                <svg viewBox="0 0 24 24" stroke-width="1.75" stroke="currentColor" fill="none" aria-hidden="true" class="icon-xs"><path d="M18 6 6 18M6 6l12 12"/></svg>
+                              {/if}
+                            </button>
+                          {/if}
+                        </div>
+                      {/each}
+                    </td>
+                  {/each}
+                </tr>
+              {/each}
+            </tbody>
+          </table>
+        </div>
+      {/if}
+    {/if}
+
   {:else}
+    <!-- ══ GRID VIEW ══ -->
     <!-- Office tabs -->
     <div class="office-tabs" role="tablist" aria-label="Select office">
       {#each offices as o}
@@ -1671,5 +1995,171 @@
       width: 100%;
       font-size: 11pt;
     }
+  }
+
+  /* ── View switcher tabs ───────────────────────────────── */
+  .view-tabs {
+    display: flex;
+    gap: 2px;
+    background: var(--pearl-mist);
+    border-radius: var(--radius-md);
+    padding: 2px;
+  }
+  .view-tab {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding: var(--space-2) var(--space-4);
+    border: none;
+    border-radius: calc(var(--radius-md) - 2px);
+    background: transparent;
+    color: var(--slate-fog);
+    font-family: var(--font-body);
+    font-size: var(--text-sm);
+    font-weight: 500;
+    cursor: pointer;
+    transition: background var(--transition-fast), color var(--transition-fast);
+  }
+  .view-tab:hover { color: var(--abyss-navy); }
+  .view-tab.active {
+    background: var(--surface-raised);
+    color: var(--caribbean-teal);
+    font-weight: 600;
+    box-shadow: var(--shadow-card);
+  }
+
+  /* ── Roster table ─────────────────────────────────────── */
+  .roster-table-wrap {
+    overflow-x: auto;
+    border-radius: var(--radius-md);
+    border: 1.5px solid var(--pearl-mist-dk);
+    background: var(--surface-raised);
+  }
+  .roster-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-family: var(--font-body);
+    font-size: var(--text-sm);
+  }
+  .roster-table th {
+    padding: var(--space-2) var(--space-3);
+    font-family: var(--font-heading);
+    font-size: var(--text-xs);
+    font-weight: 600;
+    color: var(--slate-fog);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    border-bottom: 1px solid var(--pearl-mist-dk);
+    background: var(--pearl-mist);
+    white-space: nowrap;
+  }
+  .roster-table td {
+    padding: var(--space-2) var(--space-3);
+    border-bottom: 1px solid var(--pearl-mist-dk);
+    vertical-align: top;
+  }
+  .roster-table tr:last-child td { border-bottom: none; }
+  .roster-name-col {
+    min-width: 140px;
+    max-width: 200px;
+  }
+  .roster-day-col {
+    min-width: 90px;
+    text-align: center;
+  }
+  th.roster-today, td.roster-today {
+    background: var(--caribbean-teal-lt);
+  }
+  .roster-day-abbr {
+    display: block;
+    font-size: var(--text-xs);
+    font-weight: 500;
+    color: var(--slate-fog);
+  }
+  .roster-day-num {
+    display: block;
+    font-size: var(--text-sm);
+    font-weight: 700;
+    color: var(--abyss-navy);
+  }
+  .roster-staff-name {
+    display: block;
+    font-weight: 600;
+    color: var(--abyss-navy);
+  }
+  .roster-staff-roles {
+    display: block;
+    margin-top: 2px;
+  }
+  .shift-cell {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    background: var(--caribbean-teal-lt);
+    border-left: 3px solid var(--caribbean-teal);
+    border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+    padding: var(--space-1) var(--space-2);
+    margin-bottom: var(--space-1);
+    position: relative;
+  }
+  .shift-cell.shift-cancelled {
+    background: var(--pearl-mist);
+    border-left-color: var(--slate-fog);
+    opacity: 0.6;
+  }
+  .shift-times {
+    display: flex;
+    align-items: center;
+    gap: var(--space-1);
+    font-size: var(--text-xs);
+    font-weight: 600;
+    color: var(--caribbean-teal);
+  }
+  .shift-cell.shift-cancelled .shift-times {
+    color: var(--slate-fog);
+    text-decoration: line-through;
+  }
+  .shift-role {
+    font-size: var(--text-xs);
+    color: var(--slate-fog);
+  }
+  .shift-active-icon {
+    color: var(--caribbean-teal);
+    flex-shrink: 0;
+  }
+  .shift-cancelled-icon {
+    color: var(--slate-fog);
+    flex-shrink: 0;
+  }
+  .shift-cancel-btn {
+    position: absolute;
+    top: var(--space-1);
+    right: var(--space-1);
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: var(--slate-fog);
+    padding: 2px;
+    border-radius: var(--radius-sm);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    transition: opacity var(--transition-fast), color var(--transition-fast);
+  }
+  .shift-cell:hover .shift-cancel-btn { opacity: 1; }
+  .shift-cancel-btn:hover { color: var(--healthy-coral); }
+  .shift-cancel-btn:disabled { cursor: not-allowed; opacity: 0.5; }
+
+  /* ── Icon sizes ──────────────────────────────────────── */
+  .icon-sm { width: 16px; height: 16px; flex-shrink: 0; }
+  .icon-xs { width: 12px; height: 12px; flex-shrink: 0; }
+
+  /* ── Roster empty state SVG icon ─────────────────────── */
+  .empty-state-icon-svg {
+    width: 48px;
+    height: 48px;
+    color: var(--slate-fog);
+    margin-bottom: var(--space-3);
   }
 </style>
