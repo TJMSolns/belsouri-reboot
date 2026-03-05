@@ -39,7 +39,7 @@ use staff_scheduling::commands::{query_provider_availability, get_office_provide
 use appointments::commands::{
     book_appointment, reschedule_appointment, cancel_appointment, complete_appointment,
     mark_appointment_no_show, add_appointment_note, get_schedule, get_appointment,
-    get_tomorrows_call_list,
+    get_provider_schedule, get_tomorrows_call_list,
 };
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -74,7 +74,7 @@ pub fn run() {
                 query_provider_availability, get_office_provider_schedule,
                 book_appointment, reschedule_appointment, cancel_appointment, complete_appointment,
                 mark_appointment_no_show, add_appointment_note, get_schedule, get_appointment,
-                get_tomorrows_call_list,
+                get_provider_schedule, get_tomorrows_call_list,
             ])
             .export(
                 Typescript::default().bigint(BigIntExportBehavior::Number),
@@ -130,7 +130,7 @@ pub fn run() {
             query_provider_availability, get_office_provider_schedule,
             book_appointment, reschedule_appointment, cancel_appointment, complete_appointment,
             mark_appointment_no_show, add_appointment_note, get_schedule, get_appointment,
-            get_tomorrows_call_list,
+            get_provider_schedule, get_tomorrows_call_list,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

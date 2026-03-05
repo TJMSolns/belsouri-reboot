@@ -132,6 +132,41 @@ Use the shared `getErrorMessage()` utility from `src/utils/api` in all catch blo
 
 Never skip TDD for domain logic. Write tests that invoke Tauri commands the same way the frontend does, not internal functions directly. Write the failing test first, implement minimum code to pass, refactor.
 
+## Design System Conventions
+
+These rules apply to all Svelte frontend work. They are derived from `style-guide-final.html` and enforced by `POL-001`, `POL-002`, `POL-003` in `doc/governance/POL/`.
+
+### Design Tokens (POL-001)
+- **Never use hardcoded hex values in Svelte files.** Always use `var(--token-name)` from `src/app.css`. If a color you need has no token, add it to `src/app.css` first — do not inline the hex.
+- **Canonical token names**: `--caribbean-teal`, `--healthy-coral`, `--pearl-mist`, `--abyss-navy`, `--slate-fog`, `--island-palm` for brand; `--color-booked/completed/cancelled/noshow/rescheduled` for status; `--color-role-pm/provider/staff` for roles.
+
+### Typography
+- **Never use `system-ui`, `sans-serif`, or any other font family** in Svelte components. Use `font-family: 'Lexend', sans-serif` for headings and brand text; `font-family: 'Inter', sans-serif` for all data, body, and table content.
+- Both fonts must be loaded from Google Fonts CDN in `app.html` or `+layout.svelte`.
+
+### Color + Icon Rule (POL-002)
+- **Never use color alone to communicate state.** Every status badge, action button, and feedback toast must pair color with an icon. A user with color-blindness must be able to understand the UI from shape alone.
+
+### Error Messages (POL-003)
+- Every error message displayed to the user must name: **(a) the specific object** (patient name, office name, field label), **(b) the specific problem**, and **(c) the resolution path** where possible.
+- "An error occurred" and "Invalid input" are never acceptable. See §7.2 of the style guide for examples.
+
+### Async Action Requirements
+- Every user-initiated async action requires all three: **loading state** (button disabled + spinner), **success toast** (with enough detail to verify the right thing happened), **error display** (inline or toast, never silent).
+
+### Navigation Architecture (PDR-003)
+- Sub-tasks that can complete without navigating away **must** use a sheet/panel, not full-page navigation.
+- CTAs must carry existing context forward. Never open a blank form when the subject (patient, provider, date) is already known from the current view.
+- Full-page navigation is reserved for genuine context changes (the user's intent is now *this page*, not a sub-task).
+
+### Mandatory Post-Build Review (Tony preference)
+After building or modifying **any Svelte component or page**, always run all three review skills before presenting the work as complete:
+1. `/ux-review [file]` — journey architecture, intent continuity, feedback completeness
+2. `/copy-check [file]` — labels, errors, toasts, localisation, job titles
+3. `/icon-audit [file]` — SVG spec compliance (viewBox, stroke, fill, size tokens)
+
+Do not wait to be asked. Run these as part of the standard build cycle, immediately after the code is written.
+
 ## Before Claiming Anything Works
 
 Run `pnpm tauri dev` and verify the feature end-to-end as a user would. Check the database to confirm persistence. Do not treat compilation or passing unit tests as verification. See `SBPF/archive/LESSONS-LEARNED-20260218.md` for detailed context on past failures.

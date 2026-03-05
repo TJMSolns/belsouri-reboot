@@ -1,40 +1,41 @@
 <script lang="ts">
   import { commands } from "$lib/bindings";
   import type {
-    AppointmentDto, AppointmentWithNotesDto, AppointmentNoteDto,
-    CallListEntryDto, ProviderScheduleEntry,
+    AppointmentDto, AppointmentWithNotesDto, CallListEntryDto,
+    ProviderScheduleEntry, OfficeDto, ProviderDto,
   } from "$lib/bindings";
   import { getErrorMessage } from "$lib/utils/api";
+  import { toast } from "$lib/stores/toast";
+  import { confirm } from "$lib/stores/confirm";
+  import { onMount } from "svelte";
 
-  // Placeholder until session/auth exists
   const STAFF_ID = "staff-system";
+  const SLOT_HEIGHT = 30; // px per 15-min slot
 
-  // ── State ─────────────────────────────────────────────────────────────────
+  // ── Data ──────────────────────────────────────────────────────────────────
 
-  // Data loaded from setup (needed for dropdowns)
-  let offices = $state<{ id: string; name: string; chair_count: number; archived: boolean }[]>([]);
-  let providers = $state<{ id: string; name: string; provider_type: string; archived: boolean }[]>([]);
-  let procedures = $state<{ id: string; name: string; category: string; default_duration_minutes: number; is_active: boolean }[]>([]);
-  let patients = $state<{ patient_id: string; patient_name: string; first_name: string; last_name: string; phone: string | null }[]>([]);
+  let offices = $state<OfficeDto[]>([]);
+  let allProviders = $state<ProviderDto[]>([]);
+  let procedures = $state<{ id: string; name: string; default_duration_minutes: number; is_active: boolean }[]>([]);
 
-  // Schedule view
+  // ── Grid view ─────────────────────────────────────────────────────────────
+
   let selectedOfficeId = $state("");
   let selectedDate = $state(todayLocal());
   let schedule = $state<AppointmentDto[]>([]);
-  let scheduleError = $state("");
+  let providerRoster = $state<ProviderScheduleEntry[]>([]);
   let scheduleLoading = $state(false);
 
-  // Call list
-  let showCallList = $state(false);
-  let callList = $state<CallListEntryDto[]>([]);
-  let callListDate = $state(tomorrowLocal());
+  // ── Detail drawer ─────────────────────────────────────────────────────────
 
-  // Expanded appointment detail
-  let expandedId = $state<string | null>(null);
-  let expandedDetail = $state<AppointmentWithNotesDto | null>(null);
+  let detailApptId = $state<string | null>(null);
+  let detailData = $state<AppointmentWithNotesDto | null>(null);
   let detailLoading = $state(false);
+  let showCancelConfirm = $state(false);
+  let cancelReason = $state("");
 
-  // Book appointment form
+  // ── Book drawer ───────────────────────────────────────────────────────────
+
   let showBookForm = $state(false);
   let bookOfficeId = $state("");
   let bookPatientSearch = $state("");
@@ -46,31 +47,59 @@
   let bookStartTime = $state("");
   let bookError = $state("");
   let bookLoading = $state(false);
-  let bookSuccess = $state("");
-
-  // Patient search results for booking
-  let patientSearchResults = $state<typeof patients>([]);
-
-  // View roster (providers scheduled for currently-viewed date/office)
-  let providerRoster = $state<ProviderScheduleEntry[]>([]);
-  let rosterLoading = $state(false);
-
-  // Book roster: providers scheduled for the *booking* date/office (may differ from view)
+  let patientSearchResults = $state<{ patient_id: string; patient_name: string; first_name: string; last_name: string; phone: string | null }[]>([]);
   let bookRoster = $state<ProviderScheduleEntry[]>([]);
   let bookRosterLoading = $state(false);
 
-  // Time slots available for the selected provider on the booking date
-  let availableSlots = $derived((() => {
-    const entry = bookRoster.find(e => e.provider_id === bookProviderId);
-    if (!entry) return [];
-    return generateTimeSlots(entry.start_time, entry.end_time);
-  })());
+  // ── Notes (in detail drawer) ──────────────────────────────────────────────
 
-  // Note form
-  let noteAppointmentId = $state("");
   let noteText = $state("");
   let noteError = $state("");
   let noteLoading = $state(false);
+
+  // ── Call list ─────────────────────────────────────────────────────────────
+
+  let showCallList = $state(false);
+  let callList = $state<CallListEntryDto[]>([]);
+  let callListDate = $state(tomorrowLocal());
+
+  // ── Derived grid values ───────────────────────────────────────────────────
+
+  let currentOffice = $derived(offices.find((o) => o.id === selectedOfficeId) ?? null);
+  let dayName = $derived(getDayName(selectedDate));
+  let officeHoursEntry = $derived(
+    currentOffice?.hours.find((h) => h.day_of_week === dayName) ?? null,
+  );
+  let openMins = $derived(officeHoursEntry ? parseHHMM(officeHoursEntry.open_time) : 480);
+  let closeMins = $derived(officeHoursEntry ? parseHHMM(officeHoursEntry.close_time) : 1020);
+  let gridHeight = $derived(Math.max(0, ((closeMins - openMins) / 15) * SLOT_HEIGHT));
+
+  let officeProviders = $derived(
+    allProviders
+      .filter((p) => !p.archived && p.office_ids.includes(selectedOfficeId))
+      .sort((a, b) => a.name.localeCompare(b.name)),
+  );
+
+  let timeTicks = $derived(
+    (() => {
+      if (!officeHoursEntry) return [];
+      const ticks: { label: string; top: number }[] = [];
+      for (let m = openMins; m <= closeMins; m += 60) {
+        ticks.push({ label: minsTo12h(m), top: ((m - openMins) / 15) * SLOT_HEIGHT });
+      }
+      return ticks;
+    })(),
+  );
+
+  let availableSlots = $derived(
+    (() => {
+      const entry = bookRoster.find((e) => e.provider_id === bookProviderId);
+      if (!entry) return [];
+      return generateTimeSlots(entry.start_time, entry.end_time);
+    })(),
+  );
+
+  let isToday = $derived(selectedDate === todayLocal());
 
   // ── Helpers ───────────────────────────────────────────────────────────────
 
@@ -84,20 +113,59 @@
     return d.toISOString().slice(0, 10);
   }
 
+  function addDays(date: string, n: number): string {
+    const d = new Date(date + "T12:00:00");
+    d.setDate(d.getDate() + n);
+    return d.toISOString().slice(0, 10);
+  }
+
+  function getDayName(date: string): string {
+    return new Date(date + "T12:00:00").toLocaleDateString("en-US", { weekday: "long" });
+  }
+
+  function formatDisplayDate(date: string): string {
+    return new Date(date + "T12:00:00").toLocaleDateString("en-JM", {
+      weekday: "long",
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+    });
+  }
+
+  function parseHHMM(t: string): number {
+    const [h, m] = t.split(":").map(Number);
+    return h * 60 + m;
+  }
+
+  function minsToHHMM(m: number): string {
+    return `${Math.floor(m / 60).toString().padStart(2, "0")}:${(m % 60).toString().padStart(2, "0")}`;
+  }
+
+  function minsTo12h(m: number): string {
+    const h = Math.floor(m / 60);
+    const min = m % 60;
+    const period = h >= 12 ? "PM" : "AM";
+    const h12 = h % 12 || 12;
+    return `${h12}:${min.toString().padStart(2, "0")} ${period}`;
+  }
+
   function formatTime(isoLocal: string): string {
-    // "2026-03-09T10:00:00" → "10:00"
-    return isoLocal.slice(11, 16);
+    const [h, m] = isoLocal.slice(11, 16).split(":").map(Number);
+    const period = h >= 12 ? "PM" : "AM";
+    const h12 = h % 12 || 12;
+    return `${h12}:${m.toString().padStart(2, "0")} ${period}`;
   }
 
   function formatDate(isoLocal: string): string {
-    return isoLocal.slice(0, 10);
+    return new Date(isoLocal.slice(0, 10) + "T12:00:00").toLocaleDateString("en-JM", {
+      day: "numeric", month: "short", year: "numeric",
+    });
   }
 
   function buildStartTime(date: string, time: string): string {
     return `${date}T${time}:00`;
   }
 
-  /** Generate HH:MM time slots every 15 minutes between start and end. */
   function generateTimeSlots(start: string, end: string): string[] {
     const slots: string[] = [];
     let [h, m] = start.split(":").map(Number);
@@ -105,29 +173,34 @@
     while (h * 60 + m < eh * 60 + em) {
       slots.push(`${h.toString().padStart(2, "0")}:${m.toString().padStart(2, "0")}`);
       m += 15;
-      if (m >= 60) { h += 1; m -= 60; }
+      if (m >= 60) { h++; m -= 60; }
     }
     return slots;
   }
 
   function statusBadgeClass(status: string): string {
     const map: Record<string, string> = {
-      Booked: "badge-booked",
-      Completed: "badge-completed",
-      Cancelled: "badge-cancelled",
-      NoShow: "badge-noshow",
-      Rescheduled: "badge-rescheduled",
+      Booked: "badge-booked", Completed: "badge-completed",
+      Cancelled: "badge-cancelled", NoShow: "badge-noshow", Rescheduled: "badge-rescheduled",
     };
     return map[status] ?? "badge-booked";
+  }
+
+  function statusBlockClass(status: string): string {
+    const map: Record<string, string> = {
+      Booked: "appt-booked", Completed: "appt-completed",
+      Cancelled: "appt-cancelled", NoShow: "appt-noshow", Rescheduled: "appt-rescheduled",
+    };
+    return map[status] ?? "appt-booked";
   }
 
   // ── Data loading ──────────────────────────────────────────────────────────
 
   async function loadSetupData() {
-    const [officeRes, providerRes, procRes] = await Promise.all([
+    const [officeRes, procRes, provRes] = await Promise.all([
       commands.listOffices(),
-      commands.listProviders(),
       commands.listProcedureTypes(),
+      commands.listProviders(),
     ]);
     if (officeRes.status === "ok") {
       offices = officeRes.data.filter((o) => !o.archived);
@@ -136,40 +209,25 @@
         bookOfficeId = offices[0].id;
       }
     }
-    if (providerRes.status === "ok") {
-      providers = providerRes.data.filter((p) => !p.archived);
-    }
-    if (procRes.status === "ok") {
-      procedures = procRes.data.filter((p) => p.is_active);
-    }
+    if (procRes.status === "ok") procedures = procRes.data.filter((p) => p.is_active);
+    if (provRes.status === "ok") allProviders = provRes.data;
   }
 
-  async function loadSchedule() {
+  async function loadGrid() {
     if (!selectedOfficeId) return;
     scheduleLoading = true;
-    scheduleError = "";
-    const res = await commands.getSchedule(selectedOfficeId, selectedDate);
+    const [schedRes, rosterRes] = await Promise.all([
+      commands.getSchedule(selectedOfficeId, selectedDate),
+      commands.getOfficeProviderSchedule(selectedOfficeId, selectedDate),
+    ]);
     scheduleLoading = false;
-    if (res.status === "ok") {
-      schedule = res.data;
-    } else {
-      scheduleError = getErrorMessage(res.error);
-    }
-  }
-
-  async function loadProviderRoster() {
-    if (!selectedOfficeId || !selectedDate) return;
-    rosterLoading = true;
-    const res = await commands.getOfficeProviderSchedule(selectedOfficeId, selectedDate);
-    rosterLoading = false;
-    if (res.status === "ok") {
-      providerRoster = res.data;
-    }
+    if (schedRes.status === "ok") schedule = schedRes.data;
+    else toast.error(getErrorMessage(schedRes.error));
+    if (rosterRes.status === "ok") providerRoster = rosterRes.data;
   }
 
   async function loadBookRoster() {
     if (!bookOfficeId || !bookStartDate) return;
-    // Reuse already-loaded roster if office+date match the view
     if (bookOfficeId === selectedOfficeId && bookStartDate === selectedDate) {
       bookRoster = [...providerRoster];
       return;
@@ -180,46 +238,68 @@
     if (res.status === "ok") bookRoster = res.data;
   }
 
-  function onBookProviderChange(providerId: string) {
-    bookProviderId = providerId;
-    // Auto-select first available slot for this provider
-    const entry = bookRoster.find(e => e.provider_id === providerId);
-    if (entry) {
-      const slots = generateTimeSlots(entry.start_time, entry.end_time);
-      bookStartTime = slots[0] ?? "";
-    } else {
-      bookStartTime = "";
-    }
-  }
-
   async function loadCallList() {
     if (!selectedOfficeId) return;
     const res = await commands.getTomorrowsCallList(selectedOfficeId, callListDate);
-    if (res.status === "ok") {
-      callList = res.data;
-    }
+    if (res.status === "ok") callList = res.data;
   }
 
-  async function toggleExpand(appointmentId: string) {
-    if (expandedId === appointmentId) {
-      expandedId = null;
-      expandedDetail = null;
-      return;
-    }
-    expandedId = appointmentId;
+  // ── Detail drawer ─────────────────────────────────────────────────────────
+
+  async function openDetail(apptId: string) {
+    showBookForm = false;
+    detailApptId = apptId;
     detailLoading = true;
-    const res = await commands.getAppointment(appointmentId);
+    detailData = null;
+    showCancelConfirm = false;
+    cancelReason = "";
+    noteText = "";
+    noteError = "";
+    const res = await commands.getAppointment(apptId);
     detailLoading = false;
-    if (res.status === "ok") {
-      expandedDetail = res.data;
-    }
+    if (res.status === "ok") detailData = res.data;
   }
+
+  function closeDetail() {
+    detailApptId = null;
+    detailData = null;
+    showCancelConfirm = false;
+    cancelReason = "";
+    noteText = "";
+    noteError = "";
+  }
+
+  // ── Book drawer ───────────────────────────────────────────────────────────
+
+  function openBookDrawer(providerId = "", startTime = "") {
+    closeDetail();
+    bookOfficeId = selectedOfficeId;
+    bookStartDate = selectedDate;
+    bookRoster = [...providerRoster];
+    bookProviderId = providerId;
+    bookStartTime = startTime;
+    bookPatientId = "";
+    bookPatientName = "";
+    bookPatientSearch = "";
+    bookProcedureId = "";
+    bookError = "";
+    showBookForm = true;
+  }
+
+  // ── Grid column click → pre-fill booking drawer ───────────────────────────
+
+  function onColumnClick(e: MouseEvent, providerId: string) {
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    const slotIndex = Math.floor((e.clientY - rect.top) / SLOT_HEIGHT);
+    const mins = openMins + slotIndex * 15;
+    if (mins >= closeMins) return;
+    openBookDrawer(providerId, minsToHHMM(mins));
+  }
+
+  // ── Patient search ────────────────────────────────────────────────────────
 
   async function searchPatients() {
-    if (bookPatientSearch.trim().length < 2) {
-      patientSearchResults = [];
-      return;
-    }
+    if (bookPatientSearch.trim().length < 2) { patientSearchResults = []; return; }
     const res = await commands.searchPatients(bookPatientSearch, null, null, false);
     if (res.status === "ok") {
       patientSearchResults = res.data.map((p) => ({
@@ -239,6 +319,16 @@
     patientSearchResults = [];
   }
 
+  function onBookProviderChange(providerId: string) {
+    bookProviderId = providerId;
+    const entry = bookRoster.find((e) => e.provider_id === providerId);
+    if (entry) {
+      bookStartTime = generateTimeSlots(entry.start_time, entry.end_time)[0] ?? "";
+    } else {
+      bookStartTime = "";
+    }
+  }
+
   // ── Actions ───────────────────────────────────────────────────────────────
 
   async function doBookAppointment() {
@@ -248,196 +338,155 @@
     if (!bookOfficeId) { bookError = "Select an office."; return; }
     bookLoading = true;
     bookError = "";
-    bookSuccess = "";
-
-    const startTime = buildStartTime(bookStartDate, bookStartTime);
     const res = await commands.bookAppointment(
       bookOfficeId, bookPatientId, bookProcedureId, bookProviderId,
-      startTime, null, STAFF_ID,
+      buildStartTime(bookStartDate, bookStartTime), null, STAFF_ID,
     );
     bookLoading = false;
     if (res.status === "ok") {
-      bookSuccess = `Appointment booked for ${bookPatientName}.`;
-      bookPatientId = "";
-      bookPatientName = "";
-      bookPatientSearch = "";
-      bookProviderId = "";
-      bookProcedureId = "";
       showBookForm = false;
-      await loadSchedule();
+      toast.success(`Appointment booked for ${bookPatientName}.`);
+      await loadGrid();
     } else {
       bookError = getErrorMessage(res.error);
     }
   }
 
-  async function doCancel(appointmentId: string) {
-    const reason = prompt("Cancel reason (optional):");
-    const res = await commands.cancelAppointment(appointmentId, STAFF_ID, reason ?? null);
+  async function doComplete(apptId: string) {
+    const ok = await confirm({
+      title: "Complete appointment",
+      message: "Mark this appointment as completed?",
+      confirmLabel: "Mark complete",
+    });
+    if (!ok) return;
+    const res = await commands.completeAppointment(apptId, STAFF_ID);
     if (res.status === "ok") {
-      expandedId = null;
-      expandedDetail = null;
-      await loadSchedule();
+      toast.success("Appointment marked complete.");
+      closeDetail();
+      await loadGrid();
     } else {
-      alert(getErrorMessage(res.error));
+      toast.error(getErrorMessage(res.error));
     }
   }
 
-  async function doComplete(appointmentId: string) {
-    const res = await commands.completeAppointment(appointmentId, STAFF_ID);
+  async function doNoShow(apptId: string) {
+    const ok = await confirm({
+      title: "Mark no-show",
+      message: "Mark this patient as a no-show?",
+      confirmLabel: "Mark no-show",
+      destructive: true,
+    });
+    if (!ok) return;
+    const res = await commands.markAppointmentNoShow(apptId, STAFF_ID);
     if (res.status === "ok") {
-      expandedId = null;
-      expandedDetail = null;
-      await loadSchedule();
+      toast.success("Appointment marked no-show.");
+      closeDetail();
+      await loadGrid();
     } else {
-      alert(getErrorMessage(res.error));
+      toast.error(getErrorMessage(res.error));
     }
   }
 
-  async function doNoShow(appointmentId: string) {
-    const res = await commands.markAppointmentNoShow(appointmentId, STAFF_ID);
+  async function doCancel(apptId: string) {
+    const res = await commands.cancelAppointment(apptId, STAFF_ID, cancelReason.trim() || null);
     if (res.status === "ok") {
-      expandedId = null;
-      expandedDetail = null;
-      await loadSchedule();
+      toast.success("Appointment cancelled.");
+      closeDetail();
+      await loadGrid();
     } else {
-      alert(getErrorMessage(res.error));
+      toast.error(getErrorMessage(res.error));
     }
   }
 
   async function doAddNote() {
-    if (!noteText.trim()) { noteError = "Note text is required."; return; }
+    if (!detailApptId || !noteText.trim()) { noteError = "Note text is required."; return; }
     noteLoading = true;
     noteError = "";
-    const res = await commands.addAppointmentNote(noteAppointmentId, noteText, STAFF_ID);
+    const res = await commands.addAppointmentNote(detailApptId, noteText, STAFF_ID);
     noteLoading = false;
     if (res.status === "ok") {
       noteText = "";
-      noteAppointmentId = "";
-      // Refresh detail
-      if (expandedId) {
-        const dr = await commands.getAppointment(expandedId);
-        if (dr.status === "ok") expandedDetail = dr.data;
-      }
+      const dr = await commands.getAppointment(detailApptId);
+      if (dr.status === "ok") detailData = dr.data;
     } else {
       noteError = getErrorMessage(res.error);
     }
   }
 
+  // ── Keyboard shortcuts ────────────────────────────────────────────────────
+
+  function onKeydown(e: KeyboardEvent) {
+    if (e.key === "Escape") {
+      if (showBookForm) { showBookForm = false; return; }
+      if (detailApptId) { closeDetail(); return; }
+    }
+  }
+
   // ── Init ──────────────────────────────────────────────────────────────────
 
-  import { onMount } from "svelte";
   onMount(async () => {
     await loadSetupData();
-    await Promise.all([loadSchedule(), loadProviderRoster()]);
+    await loadGrid();
   });
 
-  // Reload schedule and roster when office or date changes
   $effect(() => {
-    if (selectedOfficeId && selectedDate) {
-      loadSchedule();
-      loadProviderRoster();
-    }
+    if (selectedOfficeId && selectedDate) loadGrid();
   });
 
-  // Reload booking roster when booking office or date changes (after form is open)
   $effect(() => {
-    if (showBookForm && bookOfficeId && bookStartDate) {
-      loadBookRoster();
-    }
+    if (showBookForm && bookOfficeId && bookStartDate) loadBookRoster();
   });
 </script>
 
-<div class="page-wrap">
-  {#if offices.length === 0}
-    <div class="no-offices-banner">
-      No offices configured. Go to <a href="/setup">Setup → Offices</a> to add an office before scheduling.
+<svelte:window onkeydown={onKeydown} />
+
+<!-- ═══════════════════════════════════════════════════════
+     BOOKING DRAWER
+     ═══════════════════════════════════════════════════════ -->
+{#if showBookForm}
+  <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
+  <div class="drawer-overlay" onclick={() => (showBookForm = false)} aria-hidden="true"></div>
+
+  <div class="drawer" role="dialog" aria-modal="true" aria-labelledby="book-drawer-title">
+    <div class="drawer-header">
+      <h2 class="drawer-title" id="book-drawer-title">Book Appointment</h2>
+      <button class="btn btn-ghost btn-icon btn-sm" onclick={() => (showBookForm = false)} aria-label="Close booking form">✕</button>
     </div>
-  {/if}
 
-  <div class="page-header">
-    <h1>Schedule</h1>
-    <div class="header-controls">
-      <label for="office-select" class="sr-only">Select office</label>
-      <select id="office-select" bind:value={selectedOfficeId} class="select-sm">
-        {#each offices as o}
-          <option value={o.id}>{o.name}</option>
-        {/each}
-      </select>
-      <label for="schedule-date" class="sr-only">Select date</label>
-      <input id="schedule-date" type="date" bind:value={selectedDate} class="date-input" />
-      <button class="btn-primary" onclick={() => {
-        if (!showBookForm) {
-          bookOfficeId = selectedOfficeId;
-          bookStartDate = selectedDate;
-          bookRoster = [...providerRoster];
-          bookProviderId = "";
-          bookStartTime = "";
-        }
-        showBookForm = !showBookForm;
-        bookSuccess = "";
-      }}>
-        {showBookForm ? "Close" : "+ Book Appointment"}
-      </button>
-      <button class="btn-secondary" onclick={() => { showCallList = !showCallList; loadCallList(); }}>
-        {showCallList ? "Hide" : "Tomorrow's Call List"}
-      </button>
-    </div>
-  </div>
-
-  <!-- Provider roster -->
-  {#if selectedOfficeId}
-    <div class="roster-bar">
-      <span class="roster-label">Providers today:</span>
-      {#if rosterLoading}
-        <span class="muted">Loading…</span>
-      {:else if providerRoster.length === 0}
-        <span class="muted">None scheduled</span>
-      {:else}
-        {#each providerRoster as entry}
-          <span class="roster-chip">{entry.provider_name} <span class="roster-hours">{entry.start_time}–{entry.end_time}</span></span>
-        {/each}
-      {/if}
-    </div>
-  {/if}
-
-  <!-- Book appointment form -->
-  {#if showBookForm}
-    <div class="card book-form">
-      <h2>Book Appointment</h2>
-
-      <!-- Step 1: Date + Office (determines who's available) -->
-      <div class="form-step">
-        <div class="step-label">When &amp; Where</div>
-        <div class="step-fields">
-          <div class="field-group">
-            <label for="book-date">Date</label>
-            <input id="book-date" type="date" bind:value={bookStartDate} class="input-full" />
+    <div class="drawer-body">
+      <!-- When & where -->
+      <div class="book-section">
+        <p class="book-section-label">When &amp; where</p>
+        <div class="book-row">
+          <div class="form-field" style="flex:1">
+            <label class="field-label" for="book-date">Date</label>
+            <input id="book-date" type="date" bind:value={bookStartDate} />
           </div>
-          <div class="field-group">
-            <label for="book-office">Office</label>
-            <select id="book-office" bind:value={bookOfficeId} class="select-full">
+          <div class="form-field" style="flex:1">
+            <label class="field-label" for="book-office">Office</label>
+            <select id="book-office" bind:value={bookOfficeId}>
               {#each offices as o}<option value={o.id}>{o.name}</option>{/each}
             </select>
           </div>
         </div>
       </div>
 
-      <!-- Step 2: Provider (filtered to who's actually working that day) -->
-      <div class="form-step">
-        <div class="step-label">Provider</div>
+      <!-- Provider -->
+      <div class="book-section">
+        <p class="book-section-label">Provider</p>
         {#if bookRosterLoading}
-          <p class="muted">Checking who's working on {bookStartDate}…</p>
+          <div class="load-row"><div class="spinner spinner-sm"></div> Checking availability…</div>
         {:else if bookRoster.length === 0}
-          <div class="no-avail-warning">
-            No providers scheduled on {bookStartDate} at {offices.find(o => o.id === bookOfficeId)?.name ?? "this office"}.
-            Set availability in <a href="/setup">Setup → Providers</a>.
-          </div>
+          <p class="field-hint">
+            No providers scheduled on {bookStartDate} at this office.
+            <a href="/setup">Set availability in Setup → Providers</a>.
+          </p>
         {:else}
-          <div class="provider-chips">
+          <div class="chip-group">
             {#each bookRoster as entry}
               <button
-                class="provider-chip"
-                class:selected={bookProviderId === entry.provider_id}
+                class="chip"
+                class:chip-selected={bookProviderId === entry.provider_id}
                 onclick={() => onBookProviderChange(entry.provider_id)}
               >
                 <span class="chip-name">{entry.provider_name}</span>
@@ -448,35 +497,34 @@
         {/if}
       </div>
 
-      <!-- Step 3: Time slot (derived from provider's hours) -->
+      <!-- Time slot -->
       {#if bookProviderId && availableSlots.length > 0}
-        <div class="form-step">
-          <div class="step-label">Time Slot</div>
+        <div class="book-section">
+          <p class="book-section-label">Time</p>
           <div class="slot-grid">
             {#each availableSlots as slot}
               <button
                 class="slot-btn"
-                class:selected={bookStartTime === slot}
+                class:slot-selected={bookStartTime === slot}
                 onclick={() => (bookStartTime = slot)}
-              >{slot}</button>
+              >{minsTo12h(parseHHMM(slot))}</button>
             {/each}
           </div>
         </div>
       {/if}
 
-      <!-- Step 4: Patient -->
+      <!-- Patient -->
       {#if bookStartTime}
-        <div class="form-step">
-          <div class="step-label">Patient</div>
-          <label for="book-patient" class="sr-only">Search patient by name</label>
+        <div class="book-section">
+          <p class="book-section-label">Patient</p>
           <div class="patient-search-wrap">
+            <label class="sr-only" for="book-patient">Search patient by name</label>
             <input
               id="book-patient"
               type="text"
               bind:value={bookPatientSearch}
               placeholder="Type name to search…"
               oninput={searchPatients}
-              class="input-full"
               autocomplete="off"
             />
             {#if patientSearchResults.length > 0}
@@ -485,30 +533,32 @@
                   <li role="option" aria-selected={bookPatientId === p.patient_id}>
                     <button onclick={() => selectPatient(p)} class="dropdown-item">
                       {p.patient_name}
-                      {#if p.phone}<span class="muted"> · {p.phone}</span>{/if}
+                      {#if p.phone}<span class="text-muted"> · {p.phone}</span>{/if}
                     </button>
                   </li>
                 {/each}
               </ul>
             {:else if bookPatientSearch.trim().length >= 2 && !bookPatientId}
-              <p class="search-no-results">No patients found. <a href="/patients">Register patient first</a>.</p>
+              <p class="field-hint">No patients found. <a href="/patients">Register patient first</a>.</p>
             {/if}
-            {#if bookPatientName && bookPatientId}
-              <div class="selected-patient">✓ <strong>{bookPatientName}</strong></div>
+            {#if bookPatientId}
+              <div class="selected-patient">
+                <span class="check-icon">✓</span> <strong>{bookPatientName}</strong>
+              </div>
             {/if}
           </div>
         </div>
       {/if}
 
-      <!-- Step 5: Procedure -->
+      <!-- Procedure -->
       {#if bookPatientId}
-        <div class="form-step">
-          <div class="step-label">Procedure</div>
+        <div class="book-section">
+          <p class="book-section-label">Procedure</p>
           {#if procedures.length === 0}
-            <p class="field-hint">No procedures set up. Go to <a href="/setup">Setup → Procedure Types</a>.</p>
+            <p class="field-hint">No procedures set up. <a href="/setup">Go to Setup → Procedure Types</a>.</p>
           {:else}
-            <label for="book-procedure" class="sr-only">Select procedure</label>
-            <select id="book-procedure" bind:value={bookProcedureId} class="select-full">
+            <label class="sr-only" for="book-procedure">Select procedure</label>
+            <select id="book-procedure" bind:value={bookProcedureId}>
               <option value="">— Select procedure —</option>
               {#each procedures as p}
                 <option value={p.id}>{p.name} ({p.default_duration_minutes} min)</option>
@@ -519,488 +569,774 @@
       {/if}
 
       {#if bookError}
-        <div class="error-msg" role="alert">{bookError}</div>
+        <div class="field-error" role="alert">{bookError}</div>
       {/if}
-      {#if bookSuccess}
-        <div class="success-msg" role="status">{bookSuccess}</div>
-      {/if}
-
-      <div class="form-actions">
-        <button class="btn-primary" onclick={doBookAppointment}
-          disabled={bookLoading || !bookPatientId || !bookProviderId || !bookProcedureId || !bookStartTime}>
-          {bookLoading ? "Booking…" : "Book Appointment"}
-        </button>
-        <button class="btn-ghost" onclick={() => showBookForm = false}>Cancel</button>
-      </div>
     </div>
-  {/if}
 
-  <!-- Tomorrow's call list -->
-  {#if showCallList}
-    <div class="card call-list">
-      <div class="call-list-header">
-        <h2>Call List</h2>
-        <input type="date" bind:value={callListDate} onchange={loadCallList} class="date-input" />
-      </div>
-      {#if callList.length === 0}
-        <p class="muted">No Booked appointments for this date.</p>
+    <div class="drawer-footer">
+      <button class="btn btn-ghost" onclick={() => (showBookForm = false)}>Cancel</button>
+      <button
+        class="btn btn-primary"
+        onclick={doBookAppointment}
+        disabled={bookLoading || !bookPatientId || !bookProviderId || !bookProcedureId || !bookStartTime}
+      >
+        {#if bookLoading}<span class="spinner" aria-hidden="true"></span><span class="sr-only">Booking</span>{:else}Book appointment{/if}
+      </button>
+    </div>
+  </div>
+{/if}
+
+<!-- ═══════════════════════════════════════════════════════
+     DETAIL DRAWER
+     ═══════════════════════════════════════════════════════ -->
+{#if detailApptId !== null}
+  <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
+  <div class="drawer-overlay" onclick={closeDetail} aria-hidden="true"></div>
+
+  <div class="drawer" role="dialog" aria-modal="true" aria-labelledby="detail-drawer-title">
+    <div class="drawer-header">
+      <h2 class="drawer-title" id="detail-drawer-title">Appointment</h2>
+      <button class="btn btn-ghost btn-icon btn-sm" onclick={closeDetail} aria-label="Close detail">✕</button>
+    </div>
+
+    <div class="drawer-body">
+      {#if detailLoading}
+        <div class="load-row" style="justify-content:center; padding: 2rem 0;">
+          <div class="spinner"></div>
+        </div>
+      {:else if detailData}
+        {@const appt = detailData.appointment}
+
+        <!-- Key info -->
+        <dl class="detail-dl">
+          <dt>Patient</dt>
+          <dd><strong>{appt.patient_name}</strong></dd>
+          <dt>Procedure</dt>
+          <dd>{appt.procedure_name} · {appt.duration_minutes} min</dd>
+          <dt>Provider</dt>
+          <dd>{appt.provider_name}</dd>
+          <dt>Time</dt>
+          <dd>{formatTime(appt.start_time)} – {formatTime(appt.end_time)}</dd>
+          <dt>Status</dt>
+          <dd><span class="badge {statusBadgeClass(appt.status)}">{appt.status}</span></dd>
+        </dl>
+
+        <!-- Actions for Booked appointments -->
+        {#if appt.status === "Booked"}
+          {#if !showCancelConfirm}
+            <div class="detail-actions">
+              <button class="btn btn-primary btn-sm" onclick={() => doComplete(appt.appointment_id)}>
+                Mark complete
+              </button>
+              <button class="btn btn-ghost btn-sm" onclick={() => doNoShow(appt.appointment_id)}>
+                No-show
+              </button>
+              <button class="btn btn-destructive btn-sm" onclick={() => (showCancelConfirm = true)}>
+                Cancel appointment
+              </button>
+            </div>
+          {:else}
+            <div class="cancel-confirm-box">
+              <p class="cancel-confirm-label">Cancel this appointment?</p>
+              <div class="form-field">
+                <label class="field-label" for="cancel-reason">Reason (optional)</label>
+                <textarea id="cancel-reason" bind:value={cancelReason} rows={2} placeholder="e.g. Patient called to cancel"></textarea>
+              </div>
+              <div class="cancel-confirm-actions">
+                <button class="btn btn-ghost btn-sm" onclick={() => (showCancelConfirm = false)}>Go back</button>
+                <button class="btn btn-destructive btn-sm" onclick={() => doCancel(appt.appointment_id)}>
+                  Confirm cancellation
+                </button>
+              </div>
+            </div>
+          {/if}
+        {/if}
+
+        <!-- Notes -->
+        <div class="notes-section">
+          <h3 class="notes-heading">Notes {detailData.notes.length > 0 ? `(${detailData.notes.length})` : ""}</h3>
+
+          {#if detailData.notes.length === 0}
+            <p class="text-muted text-sm">No notes yet.</p>
+          {:else}
+            <ul class="notes-list">
+              {#each detailData.notes as note}
+                <li class="note-item">
+                  <p class="note-meta">{formatDate(note.recorded_at)} {formatTime(note.recorded_at)} · {note.recorded_by}</p>
+                  <p class="note-text">{note.text}</p>
+                </li>
+              {/each}
+            </ul>
+          {/if}
+
+          <div class="add-note-form">
+            <label class="sr-only" for="note-text">Add note</label>
+            <textarea
+              id="note-text"
+              placeholder="Add a note…"
+              bind:value={noteText}
+              rows={2}
+            ></textarea>
+            {#if noteError}<p class="field-error" role="alert">{noteError}</p>{/if}
+            <button
+              class="btn btn-secondary btn-sm"
+              onclick={doAddNote}
+              disabled={noteLoading || !noteText.trim()}
+              style="margin-top: var(--space-2);"
+            >
+              {#if noteLoading}<span class="spinner" aria-hidden="true"></span><span class="sr-only">Saving</span>{:else}Add note{/if}
+            </button>
+          </div>
+        </div>
       {:else}
-        <table class="call-table">
-          <thead>
-            <tr>
-              <th>Time</th>
-              <th>Patient</th>
-              <th>Phone</th>
-              <th>Contact Pref.</th>
-              <th>Procedure</th>
-              <th>Provider</th>
-            </tr>
-          </thead>
-          <tbody>
-            {#each callList as e}
-              <tr>
-                <td>{formatTime(e.start_time)}</td>
-                <td>{e.patient_name}</td>
-                <td>{e.patient_phone ?? "—"}</td>
-                <td>{e.preferred_contact_channel ?? "—"}</td>
-                <td>{e.procedure_name}</td>
-                <td>{e.provider_name}</td>
-              </tr>
-            {/each}
-          </tbody>
-        </table>
+        <p class="text-muted">Appointment not found.</p>
       {/if}
     </div>
-  {/if}
+  </div>
+{/if}
 
-  <!-- Schedule error -->
-  {#if scheduleError}
-    <div class="error-msg">{scheduleError}</div>
-  {/if}
+<!-- ═══════════════════════════════════════════════════════
+     MAIN PAGE
+     ═══════════════════════════════════════════════════════ -->
+<div class="page-content">
 
-  <!-- Schedule list -->
-  {#if scheduleLoading}
-    <p class="muted">Loading…</p>
-  {:else if schedule.length === 0}
-    <div class="empty-schedule">
-      <p>No appointments for {selectedDate}{selectedOfficeId ? ` at ${offices.find((o) => o.id === selectedOfficeId)?.name ?? "selected office"}` : ""}.</p>
-      <p>Click <strong>+ Book Appointment</strong> to schedule one.</p>
+  <!-- Page header -->
+  <div class="page-header">
+    <h1 class="page-title">Schedule</h1>
+    <div class="header-actions">
+      <button
+        class="btn btn-ghost btn-sm"
+        onclick={() => { showCallList = !showCallList; if (showCallList) loadCallList(); }}
+      >
+        {showCallList ? "Hide call list" : "Tomorrow's call list"}
+      </button>
+      <button
+        class="btn btn-primary"
+        onclick={() => openBookDrawer()}
+        disabled={!selectedOfficeId}
+      >
+        + Book appointment
+      </button>
+    </div>
+  </div>
+
+  {#if offices.length === 0}
+    <div class="empty-state">
+      <span class="empty-state-icon">🏥</span>
+      <p class="empty-state-title">No offices configured</p>
+      <p class="empty-state-message">Go to <a href="/setup">Setup → Offices</a> to add an office.</p>
     </div>
   {:else}
-    <div class="schedule-list">
-      {#each schedule as appt}
-        <div class="appt-card" class:expanded={expandedId === appt.appointment_id}>
-          <!-- Header row -->
-          <button
-            class="appt-header"
-            aria-expanded={expandedId === appt.appointment_id}
-            onclick={() => toggleExpand(appt.appointment_id)}
-          >
-            <span class="appt-time">{formatTime(appt.start_time)}–{formatTime(appt.end_time)}</span>
-            <span class="appt-patient">{appt.patient_name}</span>
-            <span class="appt-procedure">{appt.procedure_name}</span>
-            <span class="appt-provider">{appt.provider_name}</span>
-            <span class="badge {statusBadgeClass(appt.status)}">{appt.status}</span>
-            <span class="expand-icon">{expandedId === appt.appointment_id ? "▲" : "▼"}</span>
-          </button>
-
-          <!-- Expanded detail -->
-          {#if expandedId === appt.appointment_id}
-            {#if detailLoading}
-              <div class="detail-body"><p class="muted">Loading…</p></div>
-            {:else if expandedDetail}
-              <div class="detail-body">
-                <div class="detail-meta">
-                  <div><span class="label">Duration:</span> {appt.duration_minutes} min</div>
-                  <div><span class="label">Booked by:</span> {appt.booked_by}</div>
-                  {#if appt.rescheduled_from_id}
-                    <div><span class="label">Rescheduled from:</span> {appt.rescheduled_from_id.slice(0, 8)}…</div>
-                  {/if}
-                  {#if appt.rescheduled_to_id}
-                    <div><span class="label">Rescheduled to:</span> {appt.rescheduled_to_id.slice(0, 8)}…</div>
-                  {/if}
-                </div>
-
-                <!-- Notes -->
-                <div class="notes-section">
-                  <h4>Notes ({expandedDetail.notes.length})</h4>
-                  {#if expandedDetail.notes.length === 0}
-                    <p class="muted">No notes.</p>
-                  {:else}
-                    <ul class="notes-list">
-                      {#each expandedDetail.notes as note}
-                        <li>
-                          <span class="note-meta">{formatDate(note.recorded_at)} {formatTime(note.recorded_at)} · {note.recorded_by}</span>
-                          <p class="note-text">{note.text}</p>
-                        </li>
-                      {/each}
-                    </ul>
-                  {/if}
-
-                  <!-- Add note inline -->
-                  <div class="add-note-form">
-                    <textarea
-                      placeholder="Add a note…"
-                      bind:value={noteText}
-                      onfocus={() => { noteAppointmentId = appt.appointment_id; noteError = ""; }}
-                      rows={2}
-                      class="note-input"
-                    ></textarea>
-                    {#if noteError && noteAppointmentId === appt.appointment_id}
-                      <div class="error-msg">{noteError}</div>
-                    {/if}
-                    <button
-                      class="btn-sm"
-                      onclick={doAddNote}
-                      disabled={noteLoading || noteAppointmentId !== appt.appointment_id}
-                    >
-                      {noteLoading ? "Saving…" : "Add Note"}
-                    </button>
-                  </div>
-                </div>
-
-                <!-- Status actions (only Booked can transition) -->
-                {#if appt.status === "Booked"}
-                  <div class="appt-actions">
-                    <button class="btn-success btn-sm" onclick={() => doComplete(appt.appointment_id)}>
-                      Mark Complete
-                    </button>
-                    <button class="btn-warning btn-sm" onclick={() => doNoShow(appt.appointment_id)}>
-                      No-Show
-                    </button>
-                    <button class="btn-danger btn-sm" onclick={() => doCancel(appt.appointment_id)}>
-                      Cancel
-                    </button>
-                  </div>
-                {/if}
-              </div>
-            {/if}
-          {/if}
-        </div>
+    <!-- Office tabs -->
+    <div class="office-tabs" role="tablist" aria-label="Select office">
+      {#each offices as o}
+        <button
+          class="office-tab"
+          class:active={selectedOfficeId === o.id}
+          role="tab"
+          aria-selected={selectedOfficeId === o.id}
+          onclick={() => (selectedOfficeId = o.id)}
+        >{o.name}</button>
       {/each}
     </div>
+
+    <!-- Date navigation -->
+    <div class="date-nav">
+      <button class="btn btn-ghost btn-icon btn-sm" onclick={() => (selectedDate = addDays(selectedDate, -7))} title="Previous week" aria-label="Previous week">«</button>
+      <button class="btn btn-ghost btn-icon btn-sm" onclick={() => (selectedDate = addDays(selectedDate, -1))} title="Previous day" aria-label="Previous day">‹</button>
+      <span class="date-display">
+        {formatDisplayDate(selectedDate)}
+        {#if isToday}<span class="today-chip">Today</span>{/if}
+      </span>
+      <button class="btn btn-ghost btn-icon btn-sm" onclick={() => (selectedDate = addDays(selectedDate, 1))} title="Next day" aria-label="Next day">›</button>
+      <button class="btn btn-ghost btn-icon btn-sm" onclick={() => (selectedDate = addDays(selectedDate, 7))} title="Next week" aria-label="Next week">»</button>
+      {#if !isToday}
+        <button class="btn btn-ghost btn-sm" onclick={() => (selectedDate = todayLocal())}>Today</button>
+      {/if}
+    </div>
+
+    <!-- Tomorrow's call list -->
+    {#if showCallList}
+      <div class="card" style="margin-bottom: var(--space-6);">
+        <div class="card-header">
+          <h2 class="card-title">Call list</h2>
+          <input type="date" bind:value={callListDate} onchange={loadCallList} style="min-height:36px;width:auto;" />
+        </div>
+        {#if callList.length === 0}
+          <p class="text-muted text-sm">No booked appointments for this date.</p>
+        {:else}
+          <div class="table-wrap">
+            <table class="call-table">
+              <thead>
+                <tr>
+                  <th>Time</th>
+                  <th>Patient</th>
+                  <th>Phone</th>
+                  <th>Pref.</th>
+                  <th>Procedure</th>
+                  <th>Provider</th>
+                </tr>
+              </thead>
+              <tbody>
+                {#each callList as e}
+                  <tr>
+                    <td class="mono">{formatTime(e.start_time)}</td>
+                    <td>{e.patient_name}</td>
+                    <td class="mono">{e.patient_phone ?? "—"}</td>
+                    <td>{e.preferred_contact_channel ?? "—"}</td>
+                    <td>{e.procedure_name}</td>
+                    <td>{e.provider_name}</td>
+                  </tr>
+                {/each}
+              </tbody>
+            </table>
+          </div>
+        {/if}
+      </div>
+    {/if}
+
+    <!-- Grid -->
+    {#if scheduleLoading}
+      <div class="load-row" style="padding: 2rem; justify-content:center;">
+        <div class="spinner"></div>
+        <span class="text-muted text-sm">Loading schedule…</span>
+      </div>
+    {:else if officeHoursEntry === null}
+      <div class="empty-state">
+        <span class="empty-state-icon">🔒</span>
+        <p class="empty-state-title">Closed on {dayName}</p>
+        <p class="empty-state-message">Set office hours in <a href="/setup">Setup → Offices</a>.</p>
+      </div>
+    {:else if officeProviders.length === 0}
+      <div class="empty-state">
+        <span class="empty-state-icon">👥</span>
+        <p class="empty-state-title">No providers assigned</p>
+        <p class="empty-state-message">Assign providers to this office in <a href="/setup">Setup → Providers</a>.</p>
+      </div>
+    {:else}
+      <div class="grid-outer">
+        <!-- Column headers -->
+        <div class="grid-header">
+          <div class="time-col-head" aria-hidden="true"></div>
+          {#each officeProviders as prov}
+            {@const rosterEntry = providerRoster.find((r) => r.provider_id === prov.id)}
+            <div class="col-head" class:col-head-off={!rosterEntry}>
+              <div class="col-head-name">{prov.name}</div>
+              {#if rosterEntry}
+                <div class="col-head-hours">{rosterEntry.start_time}–{rosterEntry.end_time}</div>
+              {:else}
+                <div class="col-head-off-label">Not working</div>
+              {/if}
+            </div>
+          {/each}
+        </div>
+
+        <!-- Grid body -->
+        <div class="grid-body">
+          <!-- Time labels -->
+          <div class="time-col" style="height: {gridHeight}px" aria-hidden="true">
+            {#each timeTicks as tick}
+              <div class="time-tick" style="top: {tick.top}px">{tick.label}</div>
+            {/each}
+          </div>
+
+          <!-- Provider columns -->
+          {#each officeProviders as prov}
+            {@const rosterEntry = providerRoster.find((r) => r.provider_id === prov.id)}
+            {@const isWorking = !!rosterEntry}
+            {@const provStart = rosterEntry ? parseHHMM(rosterEntry.start_time) : openMins}
+            {@const provEnd   = rosterEntry ? parseHHMM(rosterEntry.end_time)   : openMins}
+            {@const appts = schedule.filter((a) => a.provider_id === prov.id)}
+
+            {#if isWorking}
+              <div
+                class="provider-col"
+                style="height: {gridHeight}px"
+                role="button"
+                tabindex="0"
+                aria-label="Book appointment with {prov.name}"
+                onclick={(e) => onColumnClick(e, prov.id)}
+                onkeydown={(e) => { if (e.key === "Enter") onColumnClick(e as unknown as MouseEvent, prov.id); }}
+              >
+                {#each timeTicks as tick}
+                  <div class="h-line" style="top: {tick.top}px" aria-hidden="true"></div>
+                {/each}
+
+                {#if provStart > openMins}
+                  <div class="unavail" style="top: 0; height: {((provStart - openMins) / 15) * SLOT_HEIGHT}px" aria-hidden="true"></div>
+                {/if}
+
+                {#if provEnd < closeMins}
+                  <div class="unavail" style="top: {((provEnd - openMins) / 15) * SLOT_HEIGHT}px; height: {((closeMins - provEnd) / 15) * SLOT_HEIGHT}px" aria-hidden="true"></div>
+                {/if}
+
+                {#each appts as appt}
+                  {@const apptMins = parseHHMM(appt.start_time.slice(11, 16))}
+                  {@const blockTop = ((apptMins - openMins) / 15) * SLOT_HEIGHT}
+                  {@const blockH = Math.max((appt.duration_minutes / 15) * SLOT_HEIGHT - 2, 20)}
+                  <button
+                    class="appt-block {statusBlockClass(appt.status)}"
+                    style="top: {blockTop}px; height: {blockH}px"
+                    onclick={(e) => { e.stopPropagation(); openDetail(appt.appointment_id); }}
+                    title="{appt.patient_name} · {appt.procedure_name} · {formatTime(appt.start_time)}"
+                    aria-label="{appt.patient_name}, {appt.procedure_name}, {formatTime(appt.start_time)}"
+                  >
+                    <span class="appt-time">{formatTime(appt.start_time)}</span>
+                    <span class="appt-patient">{appt.patient_name}</span>
+                    {#if appt.duration_minutes >= 30}
+                      <span class="appt-proc">{appt.procedure_name}</span>
+                    {/if}
+                  </button>
+                {/each}
+              </div>
+            {:else}
+              <div
+                class="provider-col provider-col-off"
+                style="height: {gridHeight}px"
+                aria-label="{prov.name} — not working {dayName}"
+              >
+                {#each timeTicks as tick}
+                  <div class="h-line" style="top: {tick.top}px" aria-hidden="true"></div>
+                {/each}
+                <div class="unavail unavail-full" style="top: 0; height: {gridHeight}px" aria-hidden="true"></div>
+                <span class="off-label">Not working</span>
+              </div>
+            {/if}
+          {/each}
+        </div>
+      </div>
+    {/if}
   {/if}
 </div>
 
 <style>
-  .page-wrap {
-    padding: 1.5rem 2rem;
-    font-family: system-ui, sans-serif;
-    color: #e0e0e0;
-    background: #0f0f1a;
-    min-height: 100vh;
+  /* ── Page ────────────────────────────────────────────── */
+  .header-actions {
+    display: flex;
+    gap: var(--space-3);
+    align-items: center;
   }
-  .page-header {
+
+  /* ── Office tabs ─────────────────────────────────────── */
+  .office-tabs {
+    display: flex;
+    gap: 2px;
+    flex-wrap: wrap;
+    margin-bottom: var(--space-4);
+    border-bottom: 2px solid var(--pearl-mist-dk);
+  }
+  .office-tab {
+    padding: var(--space-2) var(--space-5);
+    background: transparent;
+    border: none;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -2px;
+    color: var(--slate-fog);
+    font-family: var(--font-body);
+    font-size: var(--text-sm);
+    font-weight: 500;
+    cursor: pointer;
+    transition: color var(--transition-fast), border-color var(--transition-fast);
+    border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+  }
+  .office-tab:hover { color: var(--abyss-navy); }
+  .office-tab.active {
+    color: var(--caribbean-teal);
+    border-bottom-color: var(--caribbean-teal);
+    font-weight: 600;
+  }
+
+  /* ── Date navigation ─────────────────────────────────── */
+  .date-nav {
     display: flex;
     align-items: center;
-    gap: 1rem;
-    margin-bottom: 1.25rem;
-    flex-wrap: wrap;
+    gap: var(--space-2);
+    margin-bottom: var(--space-5);
   }
-  h1 { font-size: 1.4rem; font-weight: 600; color: #7eb8f7; margin: 0; }
-  h2 { font-size: 1.1rem; font-weight: 600; color: #ccc; margin: 0 0 1rem; }
-  h4 { font-size: 0.85rem; color: #aaa; margin: 0.75rem 0 0.4rem; }
-
-  .header-controls {
+  .date-display {
+    font-family: var(--font-heading);
+    font-size: var(--text-base);
+    font-weight: 600;
+    color: var(--abyss-navy);
+    min-width: 220px;
+    text-align: center;
     display: flex;
-    gap: 0.5rem;
-    flex-wrap: wrap;
     align-items: center;
-    margin-left: auto;
+    gap: var(--space-2);
+  }
+  .today-chip {
+    font-size: var(--text-xs);
+    font-weight: 600;
+    font-family: var(--font-heading);
+    background: var(--caribbean-teal-lt);
+    color: var(--caribbean-teal);
+    padding: 2px var(--space-2);
+    border-radius: var(--radius-pill);
   }
 
-  .card {
-    background: #1a1a2e;
-    border: 1px solid #333;
-    border-radius: 8px;
-    padding: 1.25rem;
-    margin-bottom: 1rem;
+  /* ── Call list table ─────────────────────────────────── */
+  .table-wrap { overflow-x: auto; }
+  .call-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: var(--text-sm);
   }
-
-
-  /* Stepped booking form */
-  .form-step {
-    margin-bottom: 1.1rem;
-    padding-bottom: 1.1rem;
-    border-bottom: 1px solid #2a2a40;
-  }
-  .form-step:last-of-type { border-bottom: none; margin-bottom: 0; padding-bottom: 0; }
-  .step-label {
-    font-size: 0.72rem;
-    font-weight: 700;
+  .call-table th {
+    text-align: left;
+    padding: var(--space-2) var(--space-3);
+    font-family: var(--font-heading);
+    font-size: var(--text-xs);
+    font-weight: 600;
+    color: var(--slate-fog);
     text-transform: uppercase;
     letter-spacing: 0.06em;
-    color: #7eb8f7;
-    margin-bottom: 0.55rem;
+    border-bottom: 1px solid var(--pearl-mist-dk);
+    white-space: nowrap;
   }
-  .step-fields { display: flex; gap: 1rem; flex-wrap: wrap; }
-  .field-group { display: flex; flex-direction: column; gap: 0.3rem; flex: 1; min-width: 140px; }
-  .field-group label { font-size: 0.78rem; color: #aaa; }
+  .call-table td {
+    padding: var(--space-2) var(--space-3);
+    border-bottom: 1px solid var(--pearl-mist-dk);
+    color: var(--abyss-navy);
+    white-space: nowrap;
+  }
+  .call-table tbody tr:hover { background: var(--pearl-mist); }
+  .mono { font-family: var(--font-mono); font-size: 0.8em; }
+
+  /* ── Schedule grid ───────────────────────────────────── */
+  .grid-outer {
+    background: #fff;
+    border: 1px solid var(--pearl-mist-dk);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    box-shadow: var(--shadow-sm);
+  }
+  .grid-header {
+    display: flex;
+    border-bottom: 2px solid var(--pearl-mist-dk);
+    background: var(--pearl-mist);
+    position: sticky;
+    top: var(--nav-height, 56px);
+    z-index: 10;
+  }
+  .time-col-head {
+    flex: 0 0 72px;
+    border-right: 1px solid var(--pearl-mist-dk);
+  }
+  .col-head {
+    flex: 0 0 180px;
+    padding: var(--space-3) var(--space-4);
+    border-right: 1px solid var(--pearl-mist-dk);
+    min-height: 56px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 2px;
+  }
+  .col-head:last-child { border-right: none; }
+  .col-head-name {
+    font-family: var(--font-heading);
+    font-size: var(--text-sm);
+    font-weight: 600;
+    color: var(--abyss-navy);
+  }
+  .col-head-hours {
+    font-size: var(--text-xs);
+    color: var(--caribbean-teal);
+    font-family: var(--font-mono);
+    font-weight: 500;
+  }
+  .col-head.col-head-off { opacity: 0.5; }
+  .col-head-off-label {
+    font-size: var(--text-xs);
+    color: var(--slate-fog);
+    font-style: italic;
+  }
+
+  .grid-body { display: flex; overflow-x: auto; }
+
+  /* Time labels column */
+  .time-col {
+    flex: 0 0 72px;
+    position: relative;
+    border-right: 1px solid var(--pearl-mist-dk);
+    background: var(--pearl-mist);
+    overflow: hidden;
+    flex-shrink: 0;
+  }
+  .time-tick {
+    position: absolute;
+    left: 0;
+    right: var(--space-2);
+    font-size: 0.68rem;
+    color: var(--slate-fog);
+    text-align: right;
+    transform: translateY(-50%);
+    pointer-events: none;
+    font-family: var(--font-mono);
+    white-space: nowrap;
+  }
+
+  /* Provider columns */
+  .provider-col {
+    flex: 0 0 180px;
+    position: relative;
+    border-right: 1px solid var(--pearl-mist-dk);
+    background: #fff;
+    cursor: crosshair;
+    overflow: visible;
+    flex-shrink: 0;
+  }
+  .provider-col:last-child { border-right: none; }
+  .provider-col:hover { background: #fafcfd; }
+  .provider-col-off { cursor: default; }
+  .provider-col-off:hover { background: #fff; }
+
+  /* Horizontal grid lines */
+  .h-line {
+    position: absolute;
+    left: 0;
+    right: 0;
+    height: 1px;
+    background: var(--pearl-mist-dk);
+    pointer-events: none;
+  }
+
+  /* Unavailable zone */
+  .unavail {
+    position: absolute;
+    left: 0;
+    right: 0;
+    pointer-events: none;
+    background: repeating-linear-gradient(
+      135deg,
+      transparent,
+      transparent 4px,
+      rgba(107, 124, 130, 0.08) 4px,
+      rgba(107, 124, 130, 0.08) 8px
+    );
+    z-index: 1;
+  }
+  .unavail-full { background: rgba(240, 244, 245, 0.7); }
+  .off-label {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: var(--text-xs);
+    color: var(--slate-fog);
+    font-style: italic;
+    pointer-events: none;
+    z-index: 2;
+  }
+
+  /* Appointment blocks */
+  .appt-block {
+    position: absolute;
+    left: 3px;
+    right: 3px;
+    border: none;
+    border-radius: var(--radius-sm);
+    padding: 3px 6px;
+    text-align: left;
+    cursor: pointer;
+    font-family: var(--font-body);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    z-index: 3;
+    transition: filter var(--transition-fast), box-shadow var(--transition-fast);
+    box-shadow: var(--shadow-sm);
+  }
+  .appt-block:hover {
+    filter: brightness(0.93);
+    box-shadow: var(--shadow-md);
+    z-index: 4;
+  }
+
+  .appt-booked      { background: var(--color-booked-lt);      color: var(--color-booked);      border-left: 3px solid var(--color-booked); }
+  .appt-completed   { background: var(--color-completed-lt);   color: var(--color-completed);   border-left: 3px solid var(--color-completed); }
+  .appt-cancelled   { background: var(--color-cancelled-lt);   color: var(--color-cancelled);   border-left: 3px solid var(--color-cancelled); }
+  .appt-noshow      { background: var(--color-noshow-lt);      color: var(--color-noshow);      border-left: 3px solid var(--color-noshow); }
+  .appt-rescheduled { background: var(--color-rescheduled-lt); color: var(--color-rescheduled); border-left: 3px solid var(--color-rescheduled); }
+
+  .appt-time    { font-size: 0.65rem; font-weight: 700; opacity: 0.8; font-family: var(--font-mono); }
+  .appt-patient { font-size: 0.72rem; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .appt-proc    { font-size: 0.65rem; opacity: 0.7; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  /* ── Booking drawer internals ────────────────────────── */
+  .book-section { margin-bottom: var(--space-5); }
+  .book-section-label {
+    font-family: var(--font-heading);
+    font-size: var(--text-xs);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--slate-fog);
+    margin: 0 0 var(--space-2);
+  }
+  .book-row {
+    display: flex;
+    gap: var(--space-3);
+  }
 
   /* Provider chips */
-  .provider-chips { display: flex; gap: 0.5rem; flex-wrap: wrap; }
-  .provider-chip {
-    display: flex; flex-direction: column; gap: 0.1rem;
-    padding: 0.4rem 0.75rem;
-    background: #12122a; border: 1px solid #333; border-radius: 6px;
-    cursor: pointer; text-align: left; color: #bbb;
-    transition: border-color 0.1s, background 0.1s;
+  .chip-group { display: flex; flex-direction: column; gap: var(--space-2); }
+  .chip {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: var(--space-2) var(--space-3);
+    background: var(--pearl-mist);
+    border: 1.5px solid var(--pearl-mist-dk);
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    text-align: left;
+    transition: border-color var(--transition-fast), background var(--transition-fast);
   }
-  .provider-chip:hover { border-color: #4a7abc; background: #1a1a3a; }
-  .provider-chip.selected { border-color: #7eb8f7; background: #1a2a4a; color: #fff; }
-  .chip-name { font-size: 0.875rem; font-weight: 600; }
-  .chip-hours { font-size: 0.75rem; color: #7eb8f7; font-family: monospace; }
-  .provider-chip.selected .chip-hours { color: #a0d4ff; }
+  .chip:hover { border-color: var(--caribbean-teal); background: var(--caribbean-teal-lt); }
+  .chip-selected {
+    border-color: var(--caribbean-teal);
+    background: var(--caribbean-teal-lt);
+  }
+  .chip-name { font-size: var(--text-sm); font-weight: 600; color: var(--abyss-navy); }
+  .chip-hours { font-size: var(--text-xs); color: var(--slate-fog); font-family: var(--font-mono); }
 
-  /* Time slot grid */
+  /* Time slots */
   .slot-grid {
-    display: flex; flex-wrap: wrap; gap: 0.35rem;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+    gap: var(--space-2);
   }
   .slot-btn {
-    padding: 0.3rem 0.55rem;
-    font-size: 0.8rem; font-family: monospace;
-    background: #12122a; border: 1px solid #2a2a40; border-radius: 4px;
-    color: #bbb; cursor: pointer;
+    padding: var(--space-2) var(--space-1);
+    background: var(--pearl-mist);
+    border: 1.5px solid var(--pearl-mist-dk);
+    border-radius: var(--radius-sm);
+    font-size: var(--text-xs);
+    font-family: var(--font-mono);
+    font-weight: 500;
+    color: var(--abyss-navy);
+    cursor: pointer;
+    text-align: center;
+    transition: all var(--transition-fast);
   }
-  .slot-btn:hover { border-color: #4a7abc; color: #e0e0e0; }
-  .slot-btn.selected { background: #1a3a6b; border-color: #7eb8f7; color: #7eb8f7; font-weight: 600; }
-
-  /* No availability warning */
-  .no-avail-warning {
-    background: #2a1a0a; border: 1px solid #6a3a0a; border-radius: 5px;
-    padding: 0.6rem 0.9rem; font-size: 0.82rem; color: #f7a87e;
+  .slot-btn:hover { border-color: var(--caribbean-teal); color: var(--caribbean-teal); }
+  .slot-selected {
+    background: var(--caribbean-teal);
+    border-color: var(--caribbean-teal);
+    color: #fff;
   }
-  .no-avail-warning a { color: #f7c87e; }
 
+  /* Patient search */
   .patient-search-wrap { position: relative; }
   .patient-dropdown {
     position: absolute;
     top: 100%;
     left: 0;
     right: 0;
-    background: #252540;
-    border: 1px solid #444;
-    border-radius: 4px;
+    background: #fff;
+    border: 1.5px solid var(--caribbean-teal);
+    border-top: none;
+    border-radius: 0 0 var(--radius-md) var(--radius-md);
     list-style: none;
-    margin: 2px 0 0;
-    padding: 0;
+    margin: 0;
+    padding: var(--space-1) 0;
+    box-shadow: var(--shadow-md);
     z-index: 10;
-    max-height: 180px;
+    max-height: 200px;
     overflow-y: auto;
   }
   .dropdown-item {
+    display: block;
     width: 100%;
     text-align: left;
-    padding: 0.4rem 0.75rem;
+    padding: var(--space-2) var(--space-3);
     background: none;
     border: none;
-    color: #e0e0e0;
+    font-size: var(--text-sm);
+    color: var(--abyss-navy);
     cursor: pointer;
-    font-size: 0.85rem;
   }
-  .dropdown-item:hover { background: #333; }
-  .selected-patient { font-size: 0.8rem; color: #7eb8f7; margin-top: 0.25rem; }
-
-  /* Schedule list */
-  .schedule-list { display: flex; flex-direction: column; gap: 0.5rem; }
-
-  .appt-card {
-    background: #1a1a2e;
-    border: 1px solid #333;
-    border-radius: 6px;
-    overflow: hidden;
+  .dropdown-item:hover { background: var(--caribbean-teal-lt); }
+  .selected-patient {
+    margin-top: var(--space-2);
+    font-size: var(--text-sm);
+    color: var(--island-palm);
+    font-weight: 500;
   }
-  .appt-card.expanded { border-color: #555; }
+  .check-icon { font-weight: 700; }
 
-  .appt-header {
+  /* ── Detail drawer internals ─────────────────────────── */
+  .detail-dl {
     display: grid;
-    grid-template-columns: 100px 1fr 1fr 1fr 90px 24px;
-    gap: 0.75rem;
-    align-items: center;
-    padding: 0.6rem 1rem;
-    background: none;
-    border: none;
-    color: #e0e0e0;
-    cursor: pointer;
-    text-align: left;
-    width: 100%;
-    font-size: 0.875rem;
+    grid-template-columns: max-content 1fr;
+    gap: var(--space-1) var(--space-4);
+    margin: 0 0 var(--space-5);
+    font-size: var(--text-sm);
   }
-  .appt-header:hover { background: rgba(255,255,255,0.04); }
-
-  .appt-time { font-weight: 600; color: #7eb8f7; font-family: monospace; }
-  .appt-patient { font-weight: 500; }
-  .appt-procedure { color: #bbb; }
-  .appt-provider { color: #aaa; font-size: 0.82rem; }
-  .expand-icon { color: #666; font-size: 0.75rem; justify-self: center; }
-
-  .detail-body {
-    padding: 0.75rem 1rem 1rem;
-    border-top: 1px solid #2a2a40;
-  }
-  .detail-meta {
-    display: flex;
-    gap: 1.5rem;
-    font-size: 0.82rem;
-    color: #aaa;
-    margin-bottom: 0.75rem;
-    flex-wrap: wrap;
-  }
-  .detail-meta .label { color: #777; }
-
-  .notes-section { margin-top: 0.5rem; }
-  .notes-list { list-style: none; padding: 0; margin: 0 0 0.75rem; display: flex; flex-direction: column; gap: 0.5rem; }
-  .notes-list li { background: #12122a; border-radius: 4px; padding: 0.5rem 0.75rem; }
-  .note-meta { font-size: 0.75rem; color: #777; }
-  .note-text { margin: 0.2rem 0 0; font-size: 0.85rem; }
-
-  .add-note-form { display: flex; flex-direction: column; gap: 0.35rem; }
-  .note-input {
-    background: #12122a;
-    border: 1px solid #333;
-    border-radius: 4px;
-    color: #e0e0e0;
-    padding: 0.4rem 0.6rem;
-    font-size: 0.85rem;
-    resize: vertical;
-    font-family: system-ui, sans-serif;
-  }
-
-  .appt-actions {
-    display: flex;
-    gap: 0.5rem;
-    margin-top: 0.75rem;
-    flex-wrap: wrap;
-  }
-
-  /* Call list */
-  .call-list-header { display: flex; gap: 1rem; align-items: center; margin-bottom: 0.75rem; }
-  .call-table {
-    width: 100%;
-    border-collapse: collapse;
-    font-size: 0.85rem;
-  }
-  .call-table th { color: #777; font-weight: 500; text-align: left; padding: 0.4rem 0.75rem; border-bottom: 1px solid #2a2a40; }
-  .call-table td { padding: 0.4rem 0.75rem; border-bottom: 1px solid #1e1e35; }
-
-  /* Badges */
-  .badge { padding: 0.15rem 0.5rem; border-radius: 10px; font-size: 0.75rem; font-weight: 600; text-align: center; }
-  .badge-booked    { background: #1a3a6b; color: #7eb8f7; }
-  .badge-completed { background: #1a3a2a; color: #6bcf7f; }
-  .badge-cancelled { background: #3a1a1a; color: #f77e7e; }
-  .badge-noshow    { background: #3a2a1a; color: #f7a87e; }
-  .badge-rescheduled { background: #2a2a3a; color: #bbb; }
-
-  /* Inputs */
-  .select-sm, .date-input {
-    background: #1a1a2e;
-    border: 1px solid #444;
-    border-radius: 4px;
-    color: #e0e0e0;
-    padding: 0.35rem 0.6rem;
-    font-size: 0.85rem;
-  }
-  .select-full, .input-full {
-    background: #12122a;
-    border: 1px solid #333;
-    border-radius: 4px;
-    color: #e0e0e0;
-    padding: 0.35rem 0.6rem;
-    font-size: 0.85rem;
-    width: 100%;
-    box-sizing: border-box;
-  }
-
-  /* Buttons */
-  .btn-primary {
-    background: #2a5cad;
-    color: #fff;
-    border: none;
-    border-radius: 4px;
-    padding: 0.4rem 1rem;
-    cursor: pointer;
-    font-size: 0.85rem;
-  }
-  .btn-primary:hover { background: #3a6cc0; }
-  .btn-primary:disabled { opacity: 0.5; cursor: default; }
-
-  .btn-secondary {
-    background: #252540;
-    color: #bbb;
-    border: 1px solid #444;
-    border-radius: 4px;
-    padding: 0.4rem 0.75rem;
-    cursor: pointer;
-    font-size: 0.85rem;
-  }
-  .btn-secondary:hover { color: #fff; }
-
-  .btn-ghost {
-    background: none;
-    color: #aaa;
-    border: 1px solid #444;
-    border-radius: 4px;
-    padding: 0.4rem 0.75rem;
-    cursor: pointer;
-    font-size: 0.85rem;
-  }
-
-  .btn-sm {
-    background: #252540;
-    color: #bbb;
-    border: 1px solid #444;
-    border-radius: 4px;
-    padding: 0.3rem 0.6rem;
-    cursor: pointer;
-    font-size: 0.8rem;
-  }
-  .btn-sm:disabled { opacity: 0.5; cursor: default; }
-
-  .btn-success { background: #1a3a2a; color: #6bcf7f; border: 1px solid #2a5a3a; }
-  .btn-success:hover { background: #2a4a3a; }
-  .btn-warning { background: #3a2a1a; color: #f7a87e; border: 1px solid #5a3a2a; }
-  .btn-warning:hover { background: #4a3a2a; }
-  .btn-danger  { background: #3a1a1a; color: #f77e7e; border: 1px solid #5a2a2a; }
-  .btn-danger:hover  { background: #4a2a2a; }
-
-  .form-actions { display: flex; gap: 0.5rem; margin-top: 0.5rem; }
-
-  .error-msg  { color: #f77e7e; font-size: 0.82rem; margin: 0.4rem 0; }
-  .success-msg { color: #6bcf7f; font-size: 0.82rem; margin: 0.4rem 0; }
-  .muted { color: #666; font-size: 0.85rem; }
-  .empty-schedule { padding: 2rem; text-align: center; color: #555; }
-  .no-offices-banner {
-    background: #2a1a0a; border: 1px solid #6a3a0a; color: #f7a87e;
-    border-radius: 6px; padding: 0.75rem 1rem; margin-bottom: 0.75rem; font-size: 0.875rem;
-  }
-  .no-offices-banner a { color: #f7c87e; }
-  .search-no-results { font-size: 0.8rem; color: #888; margin: 0.25rem 0 0; }
-  .search-no-results a { color: #7eb8f7; }
-  .field-hint { font-size: 0.78rem; color: #888; margin: 0; }
-  .field-hint a { color: #7eb8f7; }
-  .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
-
-  /* Provider roster bar */
-  .roster-bar {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    flex-wrap: wrap;
-    padding: 0.45rem 0.75rem;
-    background: #12122a;
-    border: 1px solid #2a2a40;
-    border-radius: 6px;
-    margin-bottom: 0.75rem;
-    font-size: 0.82rem;
-  }
-  .roster-label { color: #777; white-space: nowrap; }
-  .roster-chip {
-    background: #1a2a3a;
-    border: 1px solid #2a4a6a;
-    border-radius: 12px;
-    padding: 0.15rem 0.6rem;
-    color: #7eb8f7;
+  .detail-dl dt {
+    color: var(--slate-fog);
+    font-weight: 500;
     white-space: nowrap;
+    padding: var(--space-1) 0;
   }
-  .roster-hours { color: #4a8ac0; font-size: 0.78rem; }
+  .detail-dl dd {
+    margin: 0;
+    color: var(--abyss-navy);
+    padding: var(--space-1) 0;
+  }
+
+  .detail-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+    margin-bottom: var(--space-5);
+    padding-top: var(--space-3);
+    border-top: 1px solid var(--pearl-mist-dk);
+  }
+
+  .cancel-confirm-box {
+    padding: var(--space-4);
+    background: var(--healthy-coral-lt);
+    border: 1.5px solid var(--healthy-coral);
+    border-radius: var(--radius-md);
+    margin-bottom: var(--space-5);
+  }
+  .cancel-confirm-label {
+    font-family: var(--font-heading);
+    font-weight: 600;
+    color: var(--healthy-coral-dk);
+    margin: 0 0 var(--space-3);
+    font-size: var(--text-sm);
+  }
+  .cancel-confirm-actions {
+    display: flex;
+    gap: var(--space-2);
+    margin-top: var(--space-3);
+    justify-content: flex-end;
+  }
+
+  /* Notes */
+  .notes-section { border-top: 1px solid var(--pearl-mist-dk); padding-top: var(--space-4); }
+  .notes-heading {
+    font-family: var(--font-heading);
+    font-size: var(--text-sm);
+    font-weight: 600;
+    color: var(--abyss-navy);
+    margin: 0 0 var(--space-3);
+  }
+  .notes-list { list-style: none; margin: 0 0 var(--space-4); padding: 0; display: flex; flex-direction: column; gap: var(--space-3); }
+  .note-item { padding: var(--space-3); background: var(--pearl-mist); border-radius: var(--radius-sm); }
+  .note-meta { font-size: var(--text-xs); color: var(--slate-fog); margin: 0 0 var(--space-1); }
+  .note-text { font-size: var(--text-sm); color: var(--abyss-navy); margin: 0; }
+  .add-note-form { display: flex; flex-direction: column; }
+
+  /* ── Shared ───────────────────────────────────────────── */
+  .load-row {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+  }
 </style>

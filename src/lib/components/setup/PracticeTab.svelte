@@ -12,8 +12,9 @@
   let subdivision = $state("");
   let country = $state("Jamaica");
 
+  import { toast } from "$lib/stores/toast";
+
   let saving = $state(false);
-  let saved = $state(false);
   let error = $state<string | null>(null);
 
   let subdivisionLabel = $derived(country === "Jamaica" ? "Parish" : "Region");
@@ -57,8 +58,7 @@
     saving = false;
     if (r.status === "ok") {
       populate(r.data);
-      saved = true;
-      setTimeout(() => (saved = false), 2500);
+      toast.success("Practice details saved.");
     } else {
       error = r.error;
     }
@@ -121,45 +121,27 @@
 
   <div class="actions">
     <button type="submit" class="btn-primary" disabled={saving}>
-      {saving ? "Saving…" : "Save"}
+      {#if saving}<span class="spinner" aria-hidden="true"></span><span class="sr-only">Saving</span>{:else}Save{/if}
     </button>
-    {#if saved}
-      <span class="saved-msg">Saved!</span>
-    {/if}
   </div>
 </form>
 
 <style>
   .form { max-width: 560px; }
-  h2 { margin: 0 0 1.25rem; font-size: 1.1rem; color: #222; }
-  .form-error { color: #c0392b; font-size: 0.875rem; margin-bottom: 0.75rem; }
-  .field { display: flex; flex-direction: column; gap: 0.3rem; margin-bottom: 0.9rem; }
-  .field label { font-size: 0.8rem; font-weight: 600; color: #555; text-transform: uppercase; letter-spacing: 0.03em; }
-  .req { color: #c0392b; }
-  input {
-    padding: 0.5rem 0.7rem;
-    border: 1px solid #ccc;
-    border-radius: 6px;
-    font-size: 0.9rem;
-    font-family: system-ui, sans-serif;
-    width: 100%;
-    box-sizing: border-box;
-  }
-  input:focus { outline: none; border-color: #1a1a2e; box-shadow: 0 0 0 2px rgba(26,26,46,0.15); }
-  .row { display: flex; gap: 1rem; }
+  h2 { margin: 0 0 var(--space-5); font-size: var(--text-xl); font-family: var(--font-heading); font-weight: 600; color: var(--abyss-navy); }
+  .form-error { color: var(--healthy-coral-dk); font-size: var(--text-sm); margin-bottom: var(--space-3); }
+  .field { display: flex; flex-direction: column; gap: var(--space-1); margin-bottom: var(--space-4); }
+  .field label { font-size: var(--text-xs); font-weight: 600; color: var(--abyss-navy); font-family: var(--font-body); }
+  .req { color: var(--healthy-coral); }
+  .row { display: flex; gap: var(--space-4); }
   .row .field { flex: 1; }
-  .actions { display: flex; align-items: center; gap: 1rem; margin-top: 1.25rem; }
+  .actions { display: flex; align-items: center; gap: var(--space-4); margin-top: var(--space-5); }
   .btn-primary {
-    padding: 0.5rem 1.5rem;
-    background: #1a1a2e;
-    color: white;
-    border: none;
-    border-radius: 6px;
-    font-size: 0.9rem;
-    cursor: pointer;
-    font-family: system-ui, sans-serif;
+    display: inline-flex; align-items: center; min-height: 44px; padding: 0 var(--space-6);
+    background: var(--caribbean-teal); color: #fff; border: none;
+    border-radius: var(--radius-md); font-family: var(--font-heading); font-size: var(--text-sm);
+    font-weight: 600; cursor: pointer; transition: background var(--transition-fast);
   }
-  .btn-primary:hover:not(:disabled) { background: #2a2a4e; }
-  .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
-  .saved-msg { color: #27ae60; font-size: 0.875rem; font-weight: 600; }
+  .btn-primary:hover:not(:disabled) { background: var(--caribbean-teal-dk); }
+  .btn-primary:disabled { opacity: 0.45; cursor: not-allowed; }
 </style>

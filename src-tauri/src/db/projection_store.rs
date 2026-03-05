@@ -1398,6 +1398,30 @@ impl ProjectionStore {
         Ok(rows)
     }
 
+    /// Returns all appointments for a provider within a datetime range (inclusive).
+    /// `start_dt` and `end_dt` are full datetime strings: "YYYY-MM-DDTHH:MM:SS".
+    pub fn list_appointments_for_provider_in_range(
+        &self,
+        provider_id: &str,
+        start_dt: &str,
+        end_dt: &str,
+    ) -> Result<Vec<AppointmentRow>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT appointment_id, office_id, patient_id, patient_name, patient_phone,
+                    patient_email, preferred_contact_channel,
+                    procedure_type_id, procedure_name, procedure_category,
+                    provider_id, provider_name,
+                    start_time, end_time, duration_minutes,
+                    status, rescheduled_to_id, rescheduled_from_id, booked_by
+             FROM appointment_list
+             WHERE provider_id = ?1 AND start_time >= ?2 AND start_time <= ?3
+             ORDER BY start_time ASC",
+        )?;
+        let rows = stmt.query_map(params![provider_id, start_dt, end_dt], Self::map_appointment_row)?
+            .collect::<SqlResult<Vec<_>>>()?;
+        Ok(rows)
+    }
+
     pub fn get_license_status(&self) -> Result<Option<LicenseStatusRow>> {
         let result: SqlResult<LicenseStatusRow> = self.conn.query_row(
             "SELECT overall_validity, license_type, eval_expires_at, last_validated_at, modules_json, computed_at

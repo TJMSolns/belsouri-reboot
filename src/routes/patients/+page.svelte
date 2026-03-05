@@ -1,6 +1,7 @@
 <script lang="ts">
   import { commands, type PatientDto, type PatientWithNotesDto, type PatientNoteDto } from "$lib/bindings";
   import { onMount } from "svelte";
+  import { formatDate } from "$lib/utils/date";
 
   // ── Search state ─────────────────────────────────────────────────────────────
   let searchName = $state("");
@@ -9,6 +10,7 @@
   let patients = $state<PatientDto[]>([]);
   let searchError = $state<string | null>(null);
   let searched = $state(false);
+  let searchTimeout = $state<ReturnType<typeof setTimeout> | null>(null);
 
   // ── Register form ─────────────────────────────────────────────────────────────
   let showRegister = $state(false);
@@ -71,6 +73,31 @@
     } else {
       searchError = r.error;
     }
+  }
+
+  function onNameInput(e: Event) {
+    const value = (e.target as HTMLInputElement).value;
+    searchName = value;
+    if (searchTimeout) clearTimeout(searchTimeout);
+    if (value.length === 0) {
+      // Clear results immediately when query cleared
+      patients = [];
+      searched = false;
+      searchTimeout = setTimeout(() => runSearch(), 0);
+      return;
+    }
+    if (value.length < 2) {
+      // Don't fire search — just show the hint
+      patients = [];
+      searched = false;
+      return;
+    }
+    searchTimeout = setTimeout(() => runSearch(), 250);
+  }
+
+  function onPhoneInput() {
+    if (searchTimeout) clearTimeout(searchTimeout);
+    searchTimeout = setTimeout(() => runSearch(), 250);
   }
 
   async function register() {
@@ -238,10 +265,7 @@
     }
   }
 
-  function formatDate(iso: string | null | undefined): string {
-    if (!iso) return "—";
-    return iso.length === 10 ? iso : iso.slice(0, 10);
-  }
+
 </script>
 
 <div class="page">
@@ -291,7 +315,7 @@
       </div>
       <div class="form-actions">
         <button class="btn-primary" onclick={register} disabled={registering}>
-          {registering ? "Registering…" : "Register"}
+          {#if registering}<span class="spinner" aria-hidden="true"></span><span class="sr-only">Registering</span>{:else}Register{/if}
         </button>
         {#if regWarning}
           <button class="btn-secondary" onclick={() => { showRegister = false; regWarning = null; }}>
@@ -304,21 +328,26 @@
 
   <!-- Search -->
   <div class="search-bar">
-    <label for="search-name" class="sr-only">Search by name</label>
-    <input
-      id="search-name"
-      class="search-input"
-      placeholder="Search by name…"
-      bind:value={searchName}
-      oninput={runSearch}
-    />
+    <div class="search-field-wrap">
+      <label for="search-name" class="sr-only">Search by name</label>
+      <input
+        id="search-name"
+        class="search-input"
+        placeholder="Search by name…"
+        value={searchName}
+        oninput={onNameInput}
+      />
+      {#if searchName.length === 1}
+        <p class="search-hint">Type at least 2 characters to search</p>
+      {/if}
+    </div>
     <label for="search-phone" class="sr-only">Search by phone</label>
     <input
       id="search-phone"
       class="search-input"
       placeholder="Search by phone…"
       bind:value={searchPhone}
-      oninput={runSearch}
+      oninput={onPhoneInput}
     />
     <label class="archived-toggle">
       <input type="checkbox" bind:checked={includeArchived} onchange={runSearch} />
@@ -350,6 +379,7 @@
           role="button"
           tabindex="0"
           aria-expanded={expandedId === patient.patient_id}
+          aria-label="Expand {patient.full_name_display} details"
           onclick={() => toggleExpand(patient.patient_id)}
           onkeydown={(e) => e.key === "Enter" && toggleExpand(patient.patient_id)}
         >
@@ -357,7 +387,7 @@
             <span class="patient-name">{patient.full_name_display}</span>
             {#if patient.phone}<span class="meta">{patient.phone}</span>{/if}
             {#if patient.email}<span class="meta">{patient.email}</span>{/if}
-            {#if patient.date_of_birth}<span class="meta">DOB: {patient.date_of_birth}</span>{/if}
+            {#if patient.date_of_birth}<span class="meta">DOB: {formatDate(patient.date_of_birth)}</span>{/if}
             {#if patient.archived}<span class="badge archived-badge">Archived</span>{/if}
           </div>
           <span class="chevron">{expandedId === patient.patient_id ? "▲" : "▼"}</span>
@@ -413,14 +443,14 @@
                   </div>
                   <div class="edit-actions">
                     <button class="btn-sm" onclick={saveDemographics} disabled={demoSaving}>
-                      {demoSaving ? "Saving…" : "Save"}
+                      {#if demoSaving}<span class="spinner" aria-hidden="true"></span><span class="sr-only">Saving</span>{:else}Save{/if}
                     </button>
                     <button class="btn-sm btn-ghost" onclick={() => (editingSection = null)}>Cancel</button>
                   </div>
                 {:else}
                   <dl class="info-list">
                     <dt>Name</dt><dd>{detailData.patient.full_name_display}</dd>
-                    <dt>Date of Birth</dt><dd>{detailData.patient.date_of_birth ?? "—"}</dd>
+                    <dt>Date of Birth</dt><dd>{formatDate(detailData.patient.date_of_birth)}</dd>
                     <dt>Address</dt><dd>{detailData.patient.address_line_1 ?? "—"}</dd>
                     <dt>City</dt><dd>{detailData.patient.city_town ?? "—"}</dd>
                     <dt>Parish</dt><dd>{detailData.patient.subdivision ?? "—"}</dd>
@@ -459,7 +489,7 @@
                   </div>
                   <div class="edit-actions">
                     <button class="btn-sm" onclick={saveContact} disabled={contSaving}>
-                      {contSaving ? "Saving…" : "Save"}
+                      {#if contSaving}<span class="spinner" aria-hidden="true"></span><span class="sr-only">Saving</span>{:else}Save{/if}
                     </button>
                     <button class="btn-sm btn-ghost" onclick={() => (editingSection = null)}>Cancel</button>
                   </div>
@@ -496,7 +526,7 @@
                     rows={2}
                   ></textarea>
                   <button class="btn-sm" onclick={addNote} disabled={noteAdding || !noteText.trim()}>
-                    {noteAdding ? "Adding…" : "Add Note"}
+                    {#if noteAdding}<span class="spinner" aria-hidden="true"></span><span class="sr-only">Adding</span>{:else}Add Note{/if}
                   </button>
                 </div>
               </section>
@@ -522,116 +552,118 @@
 </div>
 
 <style>
-  .page { padding: 1.5rem 2rem; max-width: 900px; }
-  .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.25rem; }
-  h1 { margin: 0; font-size: 1.25rem; color: #222; font-family: system-ui, sans-serif; }
-  h3 { margin: 0 0 1rem; font-size: 1rem; color: #222; }
-  h4 { margin: 0; font-size: 0.82rem; font-weight: 700; text-transform: uppercase;
-       letter-spacing: 0.04em; color: #666; }
-  .error { color: #c0392b; font-size: 0.875rem; margin-bottom: 0.5rem; }
-  .warning { color: #a06030; background: #fff8e1; border: 1px solid #f0c040;
-             border-radius: 6px; padding: 0.5rem 0.75rem; font-size: 0.875rem; margin-bottom: 0.5rem; }
-  .empty { color: #999; font-style: italic; font-family: system-ui, sans-serif; }
-  .loading { color: #999; font-family: system-ui, sans-serif; }
+  /* ── Layout ──────────────────────────────────────────── */
+  .page { padding: var(--space-6); max-width: 900px; }
+  .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: var(--space-5); }
+  h1 { margin: 0; font-size: var(--text-2xl); font-family: var(--font-heading); font-weight: 700; color: var(--abyss-navy); }
+  h3 { margin: 0 0 var(--space-4); font-size: var(--text-base); font-family: var(--font-heading); font-weight: 600; color: var(--abyss-navy); }
+  h4 { margin: 0; font-size: var(--text-xs); font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--slate-fog); font-family: var(--font-heading); }
+  .error { color: var(--healthy-coral-dk); font-size: var(--text-sm); margin-bottom: var(--space-3); }
+  .warning { color: #7A5A00; background: #FFF8E7; border: 1px solid #F0C040; border-radius: var(--radius-md); padding: var(--space-2) var(--space-3); font-size: var(--text-sm); margin-bottom: var(--space-3); }
+  .empty { color: var(--slate-fog); font-style: italic; font-size: var(--text-sm); }
+  .loading { color: var(--slate-fog); font-size: var(--text-sm); }
 
-  /* Register card */
-  .card { background: white; border: 1px solid #e0e0e0; border-radius: 8px; padding: 1.25rem; }
-  .form-card { margin-bottom: 1.25rem; }
-  .form-row { display: flex; gap: 1rem; flex-wrap: wrap; margin-bottom: 0.75rem; }
-  .form-actions { display: flex; gap: 0.75rem; align-items: center; margin-top: 0.75rem; }
+  /* ── Cards / forms ───────────────────────────────────── */
+  .card { background: #fff; border: 1px solid var(--pearl-mist-dk); border-radius: var(--radius-lg); padding: var(--space-6); box-shadow: var(--shadow-sm); }
+  .form-card { margin-bottom: var(--space-5); }
+  .form-row { display: flex; gap: var(--space-4); flex-wrap: wrap; margin-bottom: var(--space-4); }
+  .form-actions { display: flex; gap: var(--space-3); align-items: center; margin-top: var(--space-4); }
 
-  /* Fields */
-  .field { display: flex; flex-direction: column; gap: 0.3rem; flex: 1; min-width: 160px; }
-  .field label { font-size: 0.78rem; font-weight: 600; color: #555;
-                 text-transform: uppercase; letter-spacing: 0.03em; font-family: system-ui, sans-serif; }
-  input:not([type="checkbox"]):not([type="date"]), select, textarea {
-    padding: 0.45rem 0.6rem; border: 1px solid #ccc; border-radius: 6px;
-    font-size: 0.9rem; font-family: system-ui, sans-serif; width: 100%; box-sizing: border-box;
-    background: white;
+  /* ── Fields ──────────────────────────────────────────── */
+  .field { display: flex; flex-direction: column; gap: var(--space-1); flex: 1; min-width: 160px; }
+  .field label { font-size: var(--text-xs); font-weight: 600; color: var(--abyss-navy); font-family: var(--font-body); }
+
+  /* ── Search ──────────────────────────────────────────── */
+  .search-bar { display: flex; gap: var(--space-3); align-items: flex-start; margin-bottom: var(--space-4); flex-wrap: wrap; }
+  .search-field-wrap { display: flex; flex-direction: column; flex: 1; min-width: 200px; }
+  .search-hint { font-size: var(--text-xs); color: var(--slate-fog); margin-top: var(--space-1); font-family: var(--font-body); margin-bottom: 0; }
+  .search-input {
+    min-height: 44px; padding: var(--space-2) var(--space-3);
+    border: 1.5px solid var(--pearl-mist-dk); border-radius: var(--radius-md);
+    font-size: var(--text-sm); font-family: var(--font-body); flex: 1; min-width: 200px; width: 100%;
+    transition: border-color var(--transition-fast);
   }
-  input[type="date"] {
-    padding: 0.45rem 0.6rem; border: 1px solid #ccc; border-radius: 6px;
-    font-size: 0.9rem; font-family: system-ui, sans-serif; width: 100%; box-sizing: border-box;
-  }
-  input:focus, select:focus, textarea:focus { outline: none; border-color: #1a1a2e; }
-  textarea { resize: vertical; }
+  .search-input:focus { outline: none; border-color: var(--caribbean-teal); box-shadow: 0 0 0 3px rgba(0,139,153,0.15); }
+  .archived-toggle { display: flex; align-items: center; gap: var(--space-2); font-size: var(--text-sm); color: var(--slate-fog); cursor: pointer; white-space: nowrap; }
 
-  /* Search */
-  .search-bar { display: flex; gap: 0.75rem; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; }
-  .search-input { padding: 0.5rem 0.75rem; border: 1px solid #ccc; border-radius: 6px;
-                  font-size: 0.9rem; font-family: system-ui, sans-serif; flex: 1; min-width: 180px; box-sizing: border-box; }
-  .search-input:focus { outline: none; border-color: #1a1a2e; }
-  .archived-toggle { display: flex; align-items: center; gap: 0.4rem;
-                     font-size: 0.85rem; color: #666; font-family: system-ui, sans-serif;
-                     cursor: pointer; white-space: nowrap; }
-
-  /* Patient list */
-  .patient-list { display: flex; flex-direction: column; gap: 0.6rem; }
-  .patient-card { border: 1px solid #ddd; border-radius: 8px; overflow: hidden; background: white; }
+  /* ── Patient list ────────────────────────────────────── */
+  .patient-list { display: flex; flex-direction: column; gap: var(--space-2); }
+  .patient-card { border: 1px solid var(--pearl-mist-dk); border-radius: var(--radius-lg); overflow: hidden; background: #fff; box-shadow: var(--shadow-sm); }
   .patient-card.archived { opacity: 0.65; }
-  .patient-row { display: flex; justify-content: space-between; align-items: center;
-                 padding: 0.75rem 1rem; cursor: pointer; user-select: none; }
-  .patient-row:hover { background: #f7f8fa; }
-  .patient-info { display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; }
-  .patient-name { font-weight: 600; font-size: 0.95rem; font-family: system-ui, sans-serif; }
-  .meta { font-size: 0.82rem; color: #777; font-family: system-ui, sans-serif; }
-  .badge { font-size: 0.72rem; padding: 0.15rem 0.5rem; border-radius: 20px; font-weight: 600; font-family: system-ui, sans-serif; }
-  .archived-badge { background: #f0e6d3; color: #a06030; }
-  .chevron { color: #aaa; font-size: 0.8rem; }
+  .patient-row { display: flex; justify-content: space-between; align-items: center; padding: var(--space-4) var(--space-5); cursor: pointer; user-select: none; transition: background var(--transition-fast); }
+  .patient-row:hover { background: var(--pearl-mist); }
+  .patient-info { display: flex; align-items: center; gap: var(--space-3); flex-wrap: wrap; }
+  .patient-name { font-weight: 600; font-size: var(--text-sm); font-family: var(--font-heading); color: var(--abyss-navy); }
+  .meta { font-size: var(--text-xs); color: var(--slate-fog); }
+  .badge { font-size: var(--text-xs); padding: 2px var(--space-2); border-radius: var(--radius-pill); font-weight: 600; font-family: var(--font-heading); }
+  .archived-badge { background: var(--pearl-mist-dk); color: var(--slate-fog); }
+  .chevron { color: var(--slate-fog); font-size: var(--text-xs); }
 
-  /* Detail panel */
-  .detail-panel { border-top: 1px solid #eee; padding: 1rem; }
-  .detail-section { margin-bottom: 1.25rem; }
+  /* ── Detail panel ────────────────────────────────────── */
+  .detail-panel { border-top: 1px solid var(--pearl-mist-dk); padding: var(--space-4) var(--space-5); }
+  .detail-section { margin-bottom: var(--space-5); }
   .detail-section:last-child { margin-bottom: 0; }
-  .section-title-row { display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.5rem; }
+  .section-title-row { display: flex; align-items: center; gap: var(--space-4); margin-bottom: var(--space-2); }
 
   /* Info list (dl) */
-  .info-list { display: grid; grid-template-columns: 130px 1fr; gap: 0.3rem 0.75rem;
-               margin: 0.5rem 0 0; font-size: 0.875rem; font-family: system-ui, sans-serif; }
-  dt { color: #888; font-weight: 500; }
-  dd { margin: 0; color: #222; }
+  .info-list { display: grid; grid-template-columns: 130px 1fr; gap: var(--space-1) var(--space-4); margin: var(--space-2) 0 0; font-size: var(--text-sm); }
+  dt { color: var(--slate-fog); font-weight: 500; }
+  dd { margin: 0; color: var(--abyss-navy); }
 
   /* Edit grid */
-  .edit-grid { display: flex; flex-wrap: wrap; gap: 0.75rem; margin-top: 0.5rem; }
+  .edit-grid { display: flex; flex-wrap: wrap; gap: var(--space-3); margin-top: var(--space-2); }
   .edit-grid .field { min-width: 150px; }
-  .edit-actions { display: flex; gap: 0.5rem; margin-top: 0.75rem; }
+  .edit-actions { display: flex; gap: var(--space-2); margin-top: var(--space-4); }
 
   /* Notes */
-  .empty-notes { color: #bbb; font-size: 0.85rem; font-style: italic; font-family: system-ui, sans-serif; margin: 0.25rem 0 0.75rem; }
-  .notes-list { list-style: none; margin: 0.25rem 0 0.75rem; padding: 0;
-                display: flex; flex-direction: column; gap: 0.5rem; }
-  .note-item { background: #f7f8fa; border: 1px solid #eee; border-radius: 6px; padding: 0.6rem 0.75rem; }
-  .note-text { margin: 0 0 0.25rem; font-size: 0.9rem; color: #222; font-family: system-ui, sans-serif; }
-  .note-meta { font-size: 0.75rem; color: #999; font-family: system-ui, sans-serif; }
-  .note-form { display: flex; gap: 0.5rem; align-items: flex-start; margin-top: 0.5rem; }
+  .empty-notes { color: var(--slate-fog); font-size: var(--text-sm); font-style: italic; margin: var(--space-1) 0 var(--space-4); }
+  .notes-list { list-style: none; margin: var(--space-2) 0 var(--space-4); padding: 0; display: flex; flex-direction: column; gap: var(--space-2); }
+  .note-item { background: var(--pearl-mist); border-radius: var(--radius-sm); padding: var(--space-3) var(--space-4); }
+  .note-text { margin: 0 0 var(--space-1); font-size: var(--text-sm); color: var(--abyss-navy); }
+  .note-meta { font-size: var(--text-xs); color: var(--slate-fog); }
+  .note-form { display: flex; gap: var(--space-2); align-items: flex-start; margin-top: var(--space-2); }
   .note-input { flex: 1; }
 
   /* Archive section */
-  .archive-section { border-top: 1px solid #f0f0f0; padding-top: 0.75rem; }
+  .archive-section { border-top: 1px solid var(--pearl-mist-dk); padding-top: var(--space-4); }
 
-  /* Buttons */
+  /* ── Buttons ─────────────────────────────────────────── */
   .btn-primary {
-    padding: 0.45rem 1.1rem; background: #1a1a2e; color: white;
-    border: none; border-radius: 6px; font-size: 0.875rem; cursor: pointer; font-family: system-ui, sans-serif;
+    display: inline-flex; align-items: center; min-height: 44px; padding: 0 var(--space-5);
+    background: var(--caribbean-teal); color: #fff; border: none;
+    border-radius: var(--radius-md); font-family: var(--font-heading); font-size: var(--text-sm);
+    font-weight: 600; cursor: pointer; white-space: nowrap;
+    transition: background var(--transition-fast);
   }
-  .btn-primary:hover:not(:disabled) { background: #2a2a4e; }
-  .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+  .btn-primary:hover:not(:disabled) { background: var(--caribbean-teal-dk); }
+  .btn-primary:disabled { opacity: 0.45; cursor: not-allowed; }
+
   .btn-secondary {
-    padding: 0.45rem 1.1rem; background: white; color: #444;
-    border: 1px solid #ccc; border-radius: 6px; font-size: 0.875rem; cursor: pointer; font-family: system-ui, sans-serif;
+    display: inline-flex; align-items: center; min-height: 44px; padding: 0 var(--space-5);
+    background: transparent; color: var(--caribbean-teal); border: 1.5px solid var(--caribbean-teal);
+    border-radius: var(--radius-md); font-family: var(--font-heading); font-size: var(--text-sm);
+    font-weight: 600; cursor: pointer; white-space: nowrap;
+    transition: background var(--transition-fast);
   }
-  .btn-secondary:hover { background: #f5f5f5; }
+  .btn-secondary:hover { background: var(--caribbean-teal-lt); }
+
   .btn-sm {
-    padding: 0.25rem 0.6rem; background: #1a1a2e; color: white;
-    border: none; border-radius: 4px; font-size: 0.78rem; cursor: pointer; font-family: system-ui, sans-serif;
-    white-space: nowrap;
+    display: inline-flex; align-items: center; min-height: 36px; padding: 0 var(--space-4);
+    background: var(--caribbean-teal); color: #fff; border: none;
+    border-radius: var(--radius-md); font-family: var(--font-heading); font-size: var(--text-xs);
+    font-weight: 600; cursor: pointer; white-space: nowrap;
+    transition: background var(--transition-fast);
   }
-  .btn-sm:disabled { opacity: 0.4; cursor: not-allowed; }
-  .btn-sm.btn-ghost { background: #eee; color: #555; }
-  .btn-sm.btn-ghost:hover { background: #ddd; }
+  .btn-sm:disabled { opacity: 0.45; cursor: not-allowed; }
+  .btn-sm.btn-ghost { background: transparent; color: var(--slate-fog); border: 1.5px solid var(--pearl-mist-dk); }
+  .btn-sm.btn-ghost:hover { background: var(--pearl-mist); color: var(--abyss-navy); border-color: var(--abyss-navy); }
+
   .btn-danger-sm {
-    padding: 0.35rem 0.75rem; background: white; color: #c0392b;
-    border: 1px solid #c0392b; border-radius: 6px; font-size: 0.8rem; cursor: pointer; font-family: system-ui, sans-serif;
+    display: inline-flex; align-items: center; min-height: 36px; padding: 0 var(--space-4);
+    background: transparent; color: var(--healthy-coral-dk); border: 1.5px solid var(--healthy-coral);
+    border-radius: var(--radius-md); font-family: var(--font-heading); font-size: var(--text-xs);
+    font-weight: 600; cursor: pointer;
+    transition: background var(--transition-fast);
   }
-  .btn-danger-sm:hover { background: #fdf0ef; }
+  .btn-danger-sm:hover { background: var(--healthy-coral-lt); }
 </style>

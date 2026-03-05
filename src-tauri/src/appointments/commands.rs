@@ -412,6 +412,23 @@ pub async fn get_appointment(
 
 #[specta::specta]
 #[tauri::command]
+pub async fn get_provider_schedule(
+    state: State<'_, AppState>,
+    provider_id: String,
+    start_date: String,
+    end_date: String,
+) -> Result<Vec<AppointmentDto>, String> {
+    let start_dt = format!("{}T00:00:00", start_date);
+    let end_dt   = format!("{}T23:59:59", end_date);
+    do_rebuild(&state)?;
+    let proj = state.projections.lock().map_err(|e| e.to_string())?;
+    let rows = proj.list_appointments_for_provider_in_range(&provider_id, &start_dt, &end_dt)
+        .map_err(|e| e.to_string())?;
+    Ok(rows.iter().map(row_to_dto).collect())
+}
+
+#[specta::specta]
+#[tauri::command]
 pub async fn get_tomorrows_call_list(
     state: State<'_, AppState>,
     office_id: String,

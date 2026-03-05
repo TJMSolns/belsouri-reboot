@@ -571,6 +571,14 @@ async getAppointment(appointmentId: string) : Promise<Result<AppointmentWithNote
     else return { status: "error", error: e  as any };
 }
 },
+async getProviderSchedule(providerId: string, startDate: string, endDate: string) : Promise<Result<AppointmentDto[], string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("get_provider_schedule", { providerId, startDate, endDate }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
 async getTomorrowsCallList(officeId: string, date: string) : Promise<Result<CallListEntryDto[], string>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("get_tomorrows_call_list", { officeId, date }) };

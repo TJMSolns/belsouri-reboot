@@ -49,40 +49,41 @@
 
 <style>
   .setup-page {
-    font-family: system-ui, sans-serif;
-    max-width: 900px;
+    max-width: 960px;
     margin: 0 auto;
-    padding: 1.5rem 2rem;
+    padding: var(--space-6);
   }
   .setup-header h1 {
-    margin: 0 0 1rem;
-    font-size: 1.5rem;
-    color: #1a1a2e;
+    margin: 0 0 var(--space-5);
+    font-size: var(--text-2xl);
+    font-family: var(--font-heading);
+    font-weight: 700;
+    color: var(--abyss-navy);
   }
   .tab-bar {
     display: flex;
     gap: 0;
-    border-bottom: 2px solid #ddd;
-    margin-bottom: 1.5rem;
+    border-bottom: 2px solid var(--pearl-mist-dk);
+    margin-bottom: var(--space-6);
   }
   .tab-btn {
-    padding: 0.6rem 1.25rem;
+    padding: var(--space-2) var(--space-5);
     border: none;
     background: none;
     cursor: pointer;
-    font-size: 0.9rem;
-    font-family: system-ui, sans-serif;
-    color: #666;
+    font-size: var(--text-sm);
+    font-family: var(--font-body);
+    font-weight: 500;
+    color: var(--slate-fog);
     border-bottom: 2px solid transparent;
     margin-bottom: -2px;
+    transition: color var(--transition-fast), border-color var(--transition-fast);
   }
-  .tab-btn:hover { color: #333; }
+  .tab-btn:hover { color: var(--abyss-navy); }
   .tab-btn.active {
-    color: #1a1a2e;
+    color: var(--caribbean-teal);
     font-weight: 600;
-    border-bottom-color: #1a1a2e;
+    border-bottom-color: var(--caribbean-teal);
   }
-  .tab-content {
-    min-height: 400px;
-  }
+  .tab-content { min-height: 400px; }
 </style>

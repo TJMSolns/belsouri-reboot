@@ -4,6 +4,8 @@
   import { onMount } from "svelte";
   import { getErrorMessage } from "$lib/utils/api";
   import { page } from "$app/stores";
+  import Toast from "$lib/components/Toast.svelte";
+  import ConfirmDialog from "$lib/components/ConfirmDialog.svelte";
 
   let { children } = $props();
 
@@ -16,41 +18,90 @@
   });
 </script>
 
-<nav class="app-nav">
-  <a href="/" class="brand">Belsouri</a>
-  <a href="/patients" class:active={$page.url.pathname.startsWith("/patients")} aria-current={$page.url.pathname.startsWith("/patients") ? "page" : undefined}>Patients</a>
-  <a href="/staff" class:active={$page.url.pathname.startsWith("/staff")} aria-current={$page.url.pathname.startsWith("/staff") ? "page" : undefined}>Staff</a>
-  <a href="/schedule" class:active={$page.url.pathname.startsWith("/schedule")} aria-current={$page.url.pathname.startsWith("/schedule") ? "page" : undefined}>Schedule</a>
-  <a href="/setup" class:active={$page.url.pathname.startsWith("/setup")} aria-current={$page.url.pathname.startsWith("/setup") ? "page" : undefined}>Setup</a>
+<nav class="app-nav" aria-label="Main navigation">
+  <a href="/" class="brand" aria-label="Belsouri home">Belsouri</a>
+  <div class="nav-links">
+    <a href="/patients"
+       class:active={$page.url.pathname.startsWith("/patients")}
+       aria-current={$page.url.pathname.startsWith("/patients") ? "page" : undefined}>
+      Patients
+    </a>
+    <a href="/staff"
+       class:active={$page.url.pathname.startsWith("/staff")}
+       aria-current={$page.url.pathname.startsWith("/staff") ? "page" : undefined}>
+      Staff
+    </a>
+    <a href="/schedule"
+       class:active={$page.url.pathname.startsWith("/schedule")}
+       aria-current={$page.url.pathname.startsWith("/schedule") ? "page" : undefined}>
+      Schedule
+    </a>
+    <a href="/setup"
+       class:active={$page.url.pathname.startsWith("/setup")}
+       aria-current={$page.url.pathname.startsWith("/setup") ? "page" : undefined}>
+      Setup
+    </a>
+  </div>
 </nav>
 
 {@render children()}
 
+<Toast />
+<ConfirmDialog />
+
 <style>
   .app-nav {
+    position: sticky;
+    top: 0;
+    z-index: 100;
     display: flex;
     align-items: center;
-    gap: 1.5rem;
-    padding: 0.6rem 2rem;
-    background: #1a1a2e;
-    border-bottom: 1px solid #333;
+    gap: 0;
+    height: var(--nav-height, 56px);
+    padding: 0 var(--space-6, 24px);
+    background: var(--abyss-navy, #1A2D33);
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.25);
   }
+
   .brand {
-    font-weight: bold;
-    font-size: 1rem;
-    margin-right: 0.5rem;
-    color: #7eb8f7;
+    font-family: var(--font-heading, 'Lexend', sans-serif);
+    font-size: 1.125rem;
+    font-weight: 700;
+    color: var(--caribbean-teal, #008B99);
     text-decoration: none;
-    font-family: system-ui, sans-serif;
+    margin-right: var(--space-8, 32px);
+    letter-spacing: -0.01em;
+    flex-shrink: 0;
   }
-  .app-nav a {
-    color: #aaa;
+  .brand:hover { color: #00a8b8; }
+
+  .nav-links {
+    display: flex;
+    align-items: stretch;
+    gap: 0;
+    height: 100%;
+  }
+
+  .nav-links a {
+    display: flex;
+    align-items: center;
+    padding: 0 var(--space-5, 20px);
+    color: rgba(240, 244, 245, 0.65);
     text-decoration: none;
-    font-family: system-ui, sans-serif;
-    font-size: 0.875rem;
-    padding: 0.2rem 0.5rem;
-    border-radius: 4px;
+    font-family: var(--font-body, 'Inter', sans-serif);
+    font-size: var(--text-sm, 0.875rem);
+    font-weight: 500;
+    border-bottom: 3px solid transparent;
+    transition: color var(--transition-fast, 100ms), border-color var(--transition-fast, 100ms);
+    white-space: nowrap;
   }
-  .app-nav a:hover { color: #fff; }
-  .app-nav a.active { color: #fff; background: rgba(255,255,255,0.1); }
+
+  .nav-links a:hover {
+    color: #fff;
+  }
+
+  .nav-links a.active {
+    color: #fff;
+    border-bottom-color: var(--caribbean-teal, #008B99);
+  }
 </style>
