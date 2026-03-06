@@ -37,8 +37,8 @@ fn apply_event(proj: &ProjectionStore, event: &crate::db::StoredEvent) -> Result
                 .ok_or_else(|| format!("Patient {} not found for appointment projection", p.patient_id))?;
             let procedure = proj.get_procedure_type(&p.procedure_type_id).map_err(|e| e.to_string())?
                 .ok_or_else(|| format!("ProcedureType {} not found for appointment projection", p.procedure_type_id))?;
-            let provider = proj.get_provider(&p.provider_id).map_err(|e| e.to_string())?
-                .ok_or_else(|| format!("Provider {} not found for appointment projection", p.provider_id))?;
+            let provider = proj.get_staff_member(&p.staff_member_id).map_err(|e| e.to_string())?
+                .ok_or_else(|| format!("Staff member {} not found for appointment projection", p.staff_member_id))?;
 
             proj.insert_appointment(&AppointmentRow {
                 appointment_id: p.appointment_id,
@@ -51,7 +51,7 @@ fn apply_event(proj: &ProjectionStore, event: &crate::db::StoredEvent) -> Result
                 procedure_type_id: p.procedure_type_id,
                 procedure_name: procedure.name,
                 procedure_category: procedure.category,
-                provider_id: p.provider_id,
+                staff_member_id: p.staff_member_id,
                 provider_name: provider.name,
                 start_time: p.start_time,
                 end_time: p.end_time,
@@ -111,9 +111,8 @@ fn parse<T: DeserializeOwned>(payload: &str, event_type: &str) -> Result<T, Stri
 mod tests {
     use super::*;
     use crate::db::{EventStore, ProjectionStore};
-    use crate::events::appointments::*;
-    // We also need patient, provider, procedure type in projections.db for the booking projection.
-    use crate::db::{PatientRow, ProcedureTypeRow, ProviderRow};
+    // We also need patient, staff member, procedure type in projections.db for the booking projection.
+    use crate::db::{PatientRow, ProcedureTypeRow, StaffMemberRow, StaffAvailabilityRow};
 
     fn setup() -> (EventStore, ProjectionStore) {
         let events = EventStore::new_in_memory().unwrap();
@@ -125,7 +124,7 @@ mod tests {
         let office_id = "office-1".to_string();
         let patient_id = "patient-1".to_string();
         let procedure_id = "procedure-1".to_string();
-        let provider_id = "provider-1".to_string();
+        let staff_member_id = "sm-1".to_string();
 
         // seed patient
         proj.upsert_patient(&PatientRow {
@@ -157,15 +156,28 @@ mod tests {
             required_provider_type: None,
         }).unwrap();
 
-        // seed provider
-        proj.upsert_provider(&ProviderRow {
-            id: provider_id.clone(),
+        // seed provider as StaffMember with Provider role + office assignment
+        proj.upsert_staff_member(&StaffMemberRow {
+            staff_member_id: staff_member_id.clone(),
             name: "Dr. Spence".to_string(),
-            provider_type: "Dentist".to_string(),
+            phone: None,
+            email: None,
+            preferred_contact_channel: None,
+            pin_hash: None,
+            clinical_specialization: Some("Dentist".to_string()),
             archived: false,
         }).unwrap();
+        proj.add_staff_role(&staff_member_id, "Provider").unwrap();
+        proj.add_staff_office_assignment(&staff_member_id, &office_id).unwrap();
+        proj.set_staff_availability(&StaffAvailabilityRow {
+            staff_member_id: staff_member_id.clone(),
+            office_id: office_id.clone(),
+            day_of_week: "Monday".to_string(),
+            start_time: "08:00".to_string(),
+            end_time: "17:00".to_string(),
+        }).unwrap();
 
-        (office_id, patient_id, procedure_id, provider_id)
+        (office_id, patient_id, procedure_id, staff_member_id)
     }
 
     fn append_for(
@@ -182,7 +194,7 @@ mod tests {
     #[test]
     fn test_appointment_booked_creates_row() {
         let (events, proj) = setup();
-        let (office_id, patient_id, procedure_id, provider_id) = seed_lookup_data(&proj);
+        let (office_id, patient_id, procedure_id, staff_member_id) = seed_lookup_data(&proj);
         let appt_id = "appt-1".to_string();
         let stream = format!("appointment:{}", appt_id);
 
@@ -191,7 +203,7 @@ mod tests {
             office_id: office_id.clone(),
             patient_id: patient_id.clone(),
             procedure_type_id: procedure_id.clone(),
-            provider_id: provider_id.clone(),
+            staff_member_id: staff_member_id.clone(),
             start_time: "2026-03-09T10:00:00".to_string(),
             end_time: "2026-03-09T11:00:00".to_string(),
             duration_minutes: 60,
@@ -213,14 +225,14 @@ mod tests {
     #[test]
     fn test_appointment_cancelled() {
         let (events, proj) = setup();
-        let (office_id, patient_id, procedure_id, provider_id) = seed_lookup_data(&proj);
+        let (office_id, patient_id, procedure_id, staff_member_id) = seed_lookup_data(&proj);
         let appt_id = "appt-1".to_string();
         let stream = format!("appointment:{}", appt_id);
 
         append_for(&events, &stream, APPOINTMENT_BOOKED, &AppointmentBookedPayload {
             appointment_id: appt_id.clone(),
             office_id, patient_id, procedure_type_id: procedure_id,
-            provider_id, start_time: "2026-03-09T10:00:00".to_string(),
+            staff_member_id, start_time: "2026-03-09T10:00:00".to_string(),
             end_time: "2026-03-09T11:00:00".to_string(), duration_minutes: 60,
             booked_by: "staff-1".to_string(), rescheduled_from_id: None,
         });
@@ -239,14 +251,14 @@ mod tests {
     #[test]
     fn test_appointment_completed() {
         let (events, proj) = setup();
-        let (office_id, patient_id, procedure_id, provider_id) = seed_lookup_data(&proj);
+        let (office_id, patient_id, procedure_id, staff_member_id) = seed_lookup_data(&proj);
         let appt_id = "appt-1".to_string();
         let stream = format!("appointment:{}", appt_id);
 
         append_for(&events, &stream, APPOINTMENT_BOOKED, &AppointmentBookedPayload {
             appointment_id: appt_id.clone(),
             office_id, patient_id, procedure_type_id: procedure_id,
-            provider_id, start_time: "2026-03-09T10:00:00".to_string(),
+            staff_member_id, start_time: "2026-03-09T10:00:00".to_string(),
             end_time: "2026-03-09T11:00:00".to_string(), duration_minutes: 60,
             booked_by: "staff-1".to_string(), rescheduled_from_id: None,
         });
@@ -264,14 +276,14 @@ mod tests {
     #[test]
     fn test_appointment_no_show() {
         let (events, proj) = setup();
-        let (office_id, patient_id, procedure_id, provider_id) = seed_lookup_data(&proj);
+        let (office_id, patient_id, procedure_id, staff_member_id) = seed_lookup_data(&proj);
         let appt_id = "appt-1".to_string();
         let stream = format!("appointment:{}", appt_id);
 
         append_for(&events, &stream, APPOINTMENT_BOOKED, &AppointmentBookedPayload {
             appointment_id: appt_id.clone(),
             office_id, patient_id, procedure_type_id: procedure_id,
-            provider_id, start_time: "2026-03-09T10:00:00".to_string(),
+            staff_member_id, start_time: "2026-03-09T10:00:00".to_string(),
             end_time: "2026-03-09T11:00:00".to_string(), duration_minutes: 60,
             booked_by: "staff-1".to_string(), rescheduled_from_id: None,
         });
@@ -289,7 +301,7 @@ mod tests {
     #[test]
     fn test_appointment_rescheduled() {
         let (events, proj) = setup();
-        let (office_id, patient_id, procedure_id, provider_id) = seed_lookup_data(&proj);
+        let (office_id, patient_id, procedure_id, staff_member_id) = seed_lookup_data(&proj);
         let orig_id = "appt-1".to_string();
         let new_id = "appt-2".to_string();
         let orig_stream = format!("appointment:{}", orig_id);
@@ -299,7 +311,7 @@ mod tests {
             appointment_id: orig_id.clone(),
             office_id: office_id.clone(), patient_id: patient_id.clone(),
             procedure_type_id: procedure_id.clone(),
-            provider_id: provider_id.clone(),
+            staff_member_id: staff_member_id.clone(),
             start_time: "2026-03-09T10:00:00".to_string(),
             end_time: "2026-03-09T11:00:00".to_string(), duration_minutes: 60,
             booked_by: "staff-1".to_string(), rescheduled_from_id: None,
@@ -313,7 +325,7 @@ mod tests {
             appointment_id: new_id.clone(),
             office_id: office_id.clone(), patient_id: patient_id.clone(),
             procedure_type_id: procedure_id.clone(),
-            provider_id: provider_id.clone(),
+            staff_member_id: staff_member_id.clone(),
             start_time: "2026-03-11T14:00:00".to_string(),
             end_time: "2026-03-11T15:00:00".to_string(), duration_minutes: 60,
             booked_by: "staff-1".to_string(),
@@ -334,14 +346,14 @@ mod tests {
     #[test]
     fn test_appointment_note_added() {
         let (events, proj) = setup();
-        let (office_id, patient_id, procedure_id, provider_id) = seed_lookup_data(&proj);
+        let (office_id, patient_id, procedure_id, staff_member_id) = seed_lookup_data(&proj);
         let appt_id = "appt-1".to_string();
         let stream = format!("appointment:{}", appt_id);
 
         append_for(&events, &stream, APPOINTMENT_BOOKED, &AppointmentBookedPayload {
             appointment_id: appt_id.clone(),
             office_id, patient_id, procedure_type_id: procedure_id,
-            provider_id, start_time: "2026-03-09T10:00:00".to_string(),
+            staff_member_id, start_time: "2026-03-09T10:00:00".to_string(),
             end_time: "2026-03-09T11:00:00".to_string(), duration_minutes: 60,
             booked_by: "staff-1".to_string(), rescheduled_from_id: None,
         });
@@ -363,7 +375,7 @@ mod tests {
     #[test]
     fn test_overlapping_booked_count() {
         let (events, proj) = setup();
-        let (office_id, patient_id, procedure_id, provider_id) = seed_lookup_data(&proj);
+        let (office_id, patient_id, procedure_id, staff_member_id) = seed_lookup_data(&proj);
 
         // Book 2 appointments at 10:00-11:00
         for i in 1..=2u32 {
@@ -374,7 +386,7 @@ mod tests {
                 office_id: office_id.clone(),
                 patient_id: patient_id.clone(),
                 procedure_type_id: procedure_id.clone(),
-                provider_id: provider_id.clone(),
+                staff_member_id: staff_member_id.clone(),
                 start_time: "2026-03-09T10:00:00".to_string(),
                 end_time: "2026-03-09T11:00:00".to_string(),
                 duration_minutes: 60,
@@ -397,14 +409,14 @@ mod tests {
     #[test]
     fn test_rebuild_is_incremental() {
         let (events, proj) = setup();
-        let (office_id, patient_id, procedure_id, provider_id) = seed_lookup_data(&proj);
+        let (office_id, patient_id, procedure_id, staff_member_id) = seed_lookup_data(&proj);
         let appt_id = "appt-1".to_string();
         let stream = format!("appointment:{}", appt_id);
 
         append_for(&events, &stream, APPOINTMENT_BOOKED, &AppointmentBookedPayload {
             appointment_id: appt_id.clone(),
             office_id, patient_id, procedure_type_id: procedure_id,
-            provider_id, start_time: "2026-03-09T10:00:00".to_string(),
+            staff_member_id, start_time: "2026-03-09T10:00:00".to_string(),
             end_time: "2026-03-09T11:00:00".to_string(), duration_minutes: 60,
             booked_by: "staff-1".to_string(), rescheduled_from_id: None,
         });

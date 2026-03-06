@@ -80,7 +80,7 @@ pub fn compute_provider_availability(
 
 /// Input record for compute_office_schedule.
 pub struct OfficeProviderData {
-    pub provider_id: String,
+    pub staff_member_id: String,
     pub provider_name: String,
     pub provider_archived: bool,
     pub exceptions: Vec<(String, String)>,          // (start_date, end_date)
@@ -104,7 +104,7 @@ pub fn compute_office_schedule(
         }
         if let Some((start, end)) = &p.availability_for_day {
             entries.push(ProviderScheduleEntry {
-                provider_id: p.provider_id.clone(),
+                staff_member_id: p.staff_member_id.clone(),
                 provider_name: p.provider_name.clone(),
                 start_time: start.clone(),
                 end_time: end.clone(),
@@ -147,7 +147,7 @@ mod tests {
         avail: Option<(&str, &str)>,
     ) -> OfficeProviderData {
         OfficeProviderData {
-            provider_id: format!("pid-{name}"),
+            staff_member_id: format!("sm-{name}"),
             provider_name: name.to_string(),
             provider_archived: archived,
             exceptions: exceptions.into_iter().map(|(s, e)| (s.to_string(), e.to_string())).collect(),

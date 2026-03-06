@@ -12,6 +12,15 @@ pub const PIN_RESET: &str = "PINReset";
 pub const STAFF_MEMBER_ARCHIVED: &str = "StaffMemberArchived";
 pub const STAFF_MEMBER_UNARCHIVED: &str = "StaffMemberUnarchived";
 
+// ── Provider clinical events (staff member IS the provider) ───────────────────
+pub const PROVIDER_TYPE_SET: &str = "ProviderTypeSet";
+pub const PROVIDER_ASSIGNED_TO_OFFICE: &str = "ProviderAssignedToOffice";
+pub const PROVIDER_REMOVED_FROM_OFFICE: &str = "ProviderRemovedFromOffice";
+pub const PROVIDER_AVAILABILITY_SET: &str = "ProviderAvailabilitySet";
+pub const PROVIDER_AVAILABILITY_CLEARED: &str = "ProviderAvailabilityCleared";
+pub const PROVIDER_EXCEPTION_SET: &str = "ProviderExceptionSet";
+pub const PROVIDER_EXCEPTION_REMOVED: &str = "ProviderExceptionRemoved";
+
 pub const ALL_EVENT_TYPES: &[&str] = &[
     STAFF_MEMBER_REGISTERED,
     PRACTICE_MANAGER_CLAIMED,
@@ -22,6 +31,13 @@ pub const ALL_EVENT_TYPES: &[&str] = &[
     PIN_RESET,
     STAFF_MEMBER_ARCHIVED,
     STAFF_MEMBER_UNARCHIVED,
+    PROVIDER_TYPE_SET,
+    PROVIDER_ASSIGNED_TO_OFFICE,
+    PROVIDER_REMOVED_FROM_OFFICE,
+    PROVIDER_AVAILABILITY_SET,
+    PROVIDER_AVAILABILITY_CLEARED,
+    PROVIDER_EXCEPTION_SET,
+    PROVIDER_EXCEPTION_REMOVED,
 ];
 
 // ── Payload structs ───────────────────────────────────────────────────────────
@@ -78,4 +94,55 @@ pub struct StaffMemberArchivedPayload {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StaffMemberUnarchivedPayload {
     pub staff_member_id: String,
+}
+
+// ── Provider clinical event payloads ──────────────────────────────────────────
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProviderTypeSetPayload {
+    pub staff_member_id: String,
+    pub clinical_specialization: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProviderAssignedToOfficePayload {
+    pub staff_member_id: String,
+    pub office_id: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProviderRemovedFromOfficePayload {
+    pub staff_member_id: String,
+    pub office_id: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProviderAvailabilitySetPayload {
+    pub staff_member_id: String,
+    pub office_id: String,
+    pub day_of_week: String,
+    pub start_time: String,
+    pub end_time: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProviderAvailabilityClearedPayload {
+    pub staff_member_id: String,
+    pub office_id: String,
+    pub day_of_week: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProviderExceptionSetPayload {
+    pub staff_member_id: String,
+    pub start_date: String,
+    pub end_date: String,
+    pub reason: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProviderExceptionRemovedPayload {
+    pub staff_member_id: String,
+    pub start_date: String,
+    pub end_date: String,
 }

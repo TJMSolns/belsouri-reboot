@@ -97,6 +97,7 @@ mod tests {
             email: None,
             preferred_contact_channel: None,
             pin_hash: None,
+            clinical_specialization: None,
             archived: false,
         }).unwrap();
 

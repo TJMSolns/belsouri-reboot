@@ -1,4 +1,4 @@
-use crate::db::{EventStore, ProjectionStore, StaffMemberRow};
+use crate::db::{EventStore, ProjectionStore, StaffMemberRow, StaffAvailabilityRow, StaffExceptionRow};
 use crate::events::staff_management::*;
 use serde::de::DeserializeOwned;
 
@@ -40,6 +40,7 @@ fn apply_event(proj: &ProjectionStore, event: &crate::db::StoredEvent) -> Result
                 preferred_contact_channel: p.preferred_contact_channel,
                 pin_hash: None,
                 archived: false,
+                clinical_specialization: None,
             }).map_err(|e| e.to_string())?;
         }
         PRACTICE_MANAGER_CLAIMED => {
@@ -75,6 +76,50 @@ fn apply_event(proj: &ProjectionStore, event: &crate::db::StoredEvent) -> Result
         STAFF_MEMBER_UNARCHIVED => {
             let p: StaffMemberUnarchivedPayload = parse(&event.payload, STAFF_MEMBER_UNARCHIVED)?;
             proj.set_staff_member_archived(&p.staff_member_id, false)
+                .map_err(|e| e.to_string())?;
+        }
+        PROVIDER_TYPE_SET => {
+            let p: ProviderTypeSetPayload = parse(&event.payload, PROVIDER_TYPE_SET)?;
+            proj.update_staff_clinical_specialization(&p.staff_member_id, &p.clinical_specialization)
+                .map_err(|e| e.to_string())?;
+        }
+        PROVIDER_ASSIGNED_TO_OFFICE => {
+            let p: ProviderAssignedToOfficePayload = parse(&event.payload, PROVIDER_ASSIGNED_TO_OFFICE)?;
+            proj.add_staff_office_assignment(&p.staff_member_id, &p.office_id)
+                .map_err(|e| e.to_string())?;
+        }
+        PROVIDER_REMOVED_FROM_OFFICE => {
+            let p: ProviderRemovedFromOfficePayload = parse(&event.payload, PROVIDER_REMOVED_FROM_OFFICE)?;
+            proj.remove_staff_office_assignment(&p.staff_member_id, &p.office_id)
+                .map_err(|e| e.to_string())?;
+        }
+        PROVIDER_AVAILABILITY_SET => {
+            let p: ProviderAvailabilitySetPayload = parse(&event.payload, PROVIDER_AVAILABILITY_SET)?;
+            proj.set_staff_availability(&StaffAvailabilityRow {
+                staff_member_id: p.staff_member_id,
+                office_id: p.office_id,
+                day_of_week: p.day_of_week,
+                start_time: p.start_time,
+                end_time: p.end_time,
+            }).map_err(|e| e.to_string())?;
+        }
+        PROVIDER_AVAILABILITY_CLEARED => {
+            let p: ProviderAvailabilityClearedPayload = parse(&event.payload, PROVIDER_AVAILABILITY_CLEARED)?;
+            proj.delete_staff_availability(&p.staff_member_id, &p.office_id, &p.day_of_week)
+                .map_err(|e| e.to_string())?;
+        }
+        PROVIDER_EXCEPTION_SET => {
+            let p: ProviderExceptionSetPayload = parse(&event.payload, PROVIDER_EXCEPTION_SET)?;
+            proj.add_staff_exception(&StaffExceptionRow {
+                staff_member_id: p.staff_member_id,
+                start_date: p.start_date,
+                end_date: p.end_date,
+                reason: p.reason,
+            }).map_err(|e| e.to_string())?;
+        }
+        PROVIDER_EXCEPTION_REMOVED => {
+            let p: ProviderExceptionRemovedPayload = parse(&event.payload, PROVIDER_EXCEPTION_REMOVED)?;
+            proj.remove_staff_exception(&p.staff_member_id, &p.start_date, &p.end_date)
                 .map_err(|e| e.to_string())?;
         }
         _ => {}

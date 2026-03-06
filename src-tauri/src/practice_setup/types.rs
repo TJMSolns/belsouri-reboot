@@ -36,32 +36,6 @@ pub struct OfficeHoursDto {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
-pub struct ProviderDto {
-    pub id: String,
-    pub name: String,
-    pub provider_type: String,
-    pub office_ids: Vec<String>,
-    pub availability: Vec<AvailabilityWindowDto>,
-    pub exceptions: Vec<AvailabilityExceptionDto>,
-    pub archived: bool,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, Type)]
-pub struct AvailabilityWindowDto {
-    pub office_id: String,
-    pub day_of_week: String,
-    pub start_time: String,
-    pub end_time: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, Type)]
-pub struct AvailabilityExceptionDto {
-    pub start_date: String,
-    pub end_date: String,
-    pub reason: Option<String>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, Type)]
 pub struct ProcedureTypeDto {
     pub id: String,
     pub name: String,

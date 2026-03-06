@@ -68,31 +68,6 @@ pub struct OfficeHoursRow {
 }
 
 #[derive(Debug, Clone)]
-pub struct ProviderRow {
-    pub id: String,
-    pub name: String,
-    pub provider_type: String,
-    pub archived: bool,
-}
-
-#[derive(Debug, Clone)]
-pub struct ProviderAvailabilityRow {
-    pub provider_id: String,
-    pub office_id: String,
-    pub day_of_week: String,
-    pub start_time: String,
-    pub end_time: String,
-}
-
-#[derive(Debug, Clone)]
-pub struct ProviderExceptionRow {
-    pub provider_id: String,
-    pub start_date: String,
-    pub end_date: String,
-    pub reason: Option<String>,
-}
-
-#[derive(Debug, Clone)]
 pub struct ProcedureTypeRow {
     pub id: String,
     pub name: String,
@@ -113,12 +88,36 @@ pub struct StaffMemberRow {
     pub preferred_contact_channel: Option<String>,
     pub pin_hash: Option<String>,
     pub archived: bool,
+    pub clinical_specialization: Option<String>,
 }
 
 #[derive(Debug, Clone)]
 pub struct StaffRoleRow {
     pub staff_member_id: String,
     pub role: String,
+}
+
+#[derive(Debug, Clone)]
+pub struct StaffOfficeAssignmentRow {
+    pub staff_member_id: String,
+    pub office_id: String,
+}
+
+#[derive(Debug, Clone)]
+pub struct StaffAvailabilityRow {
+    pub staff_member_id: String,
+    pub office_id: String,
+    pub day_of_week: String,
+    pub start_time: String,
+    pub end_time: String,
+}
+
+#[derive(Debug, Clone)]
+pub struct StaffExceptionRow {
+    pub staff_member_id: String,
+    pub start_date: String,
+    pub end_date: String,
+    pub reason: Option<String>,
 }
 
 // ── Staff Shift row types ─────────────────────────────────────────────────────
@@ -153,7 +152,7 @@ pub struct AppointmentRow {
     pub procedure_type_id: String,
     pub procedure_name: String,
     pub procedure_category: String,
-    pub provider_id: String,
+    pub staff_member_id: String,
     pub provider_name: String,
     /// Local datetime "YYYY-MM-DDTHH:MM:SS"
     pub start_time: String,
@@ -284,32 +283,6 @@ impl ProjectionStore {
                 close_time TEXT NOT NULL,
                 PRIMARY KEY (office_id, day_of_week)
             );
-            CREATE TABLE IF NOT EXISTS providers (
-                id TEXT PRIMARY KEY,
-                name TEXT NOT NULL,
-                provider_type TEXT NOT NULL,
-                archived INTEGER NOT NULL DEFAULT 0
-            );
-            CREATE TABLE IF NOT EXISTS provider_office_assignments (
-                provider_id TEXT NOT NULL,
-                office_id TEXT NOT NULL,
-                PRIMARY KEY (provider_id, office_id)
-            );
-            CREATE TABLE IF NOT EXISTS provider_availability (
-                provider_id TEXT NOT NULL,
-                office_id TEXT NOT NULL,
-                day_of_week TEXT NOT NULL,
-                start_time TEXT NOT NULL,
-                end_time TEXT NOT NULL,
-                PRIMARY KEY (provider_id, office_id, day_of_week)
-            );
-            CREATE TABLE IF NOT EXISTS provider_exceptions (
-                provider_id TEXT NOT NULL,
-                start_date TEXT NOT NULL,
-                end_date TEXT NOT NULL,
-                reason TEXT,
-                PRIMARY KEY (provider_id, start_date, end_date)
-            );
             CREATE TABLE IF NOT EXISTS procedure_types (
                 id TEXT PRIMARY KEY,
                 name TEXT NOT NULL,
@@ -325,12 +298,33 @@ impl ProjectionStore {
                 email TEXT,
                 preferred_contact_channel TEXT,
                 pin_hash TEXT,
-                archived INTEGER NOT NULL DEFAULT 0
+                archived INTEGER NOT NULL DEFAULT 0,
+                clinical_specialization TEXT
             );
             CREATE TABLE IF NOT EXISTS staff_member_roles (
                 staff_member_id TEXT NOT NULL,
                 role TEXT NOT NULL,
                 PRIMARY KEY (staff_member_id, role)
+            );
+            CREATE TABLE IF NOT EXISTS staff_office_assignments (
+                staff_member_id TEXT NOT NULL,
+                office_id TEXT NOT NULL,
+                PRIMARY KEY (staff_member_id, office_id)
+            );
+            CREATE TABLE IF NOT EXISTS staff_availability (
+                staff_member_id TEXT NOT NULL,
+                office_id TEXT NOT NULL,
+                day_of_week TEXT NOT NULL,
+                start_time TEXT NOT NULL,
+                end_time TEXT NOT NULL,
+                PRIMARY KEY (staff_member_id, office_id, day_of_week)
+            );
+            CREATE TABLE IF NOT EXISTS staff_exceptions (
+                staff_member_id TEXT NOT NULL,
+                start_date TEXT NOT NULL,
+                end_date TEXT NOT NULL,
+                reason TEXT,
+                PRIMARY KEY (staff_member_id, start_date, end_date)
             );
             CREATE TABLE IF NOT EXISTS patients (
                 patient_id TEXT PRIMARY KEY,
@@ -373,7 +367,7 @@ impl ProjectionStore {
                 procedure_type_id TEXT NOT NULL,
                 procedure_name TEXT NOT NULL,
                 procedure_category TEXT NOT NULL,
-                provider_id TEXT NOT NULL,
+                staff_member_id TEXT NOT NULL,
                 provider_name TEXT NOT NULL,
                 start_time TEXT NOT NULL,
                 end_time TEXT NOT NULL,
@@ -420,6 +414,7 @@ impl ProjectionStore {
         let _ = self.conn.execute_batch("ALTER TABLE offices ADD COLUMN subdivision TEXT;");
         let _ = self.conn.execute_batch("ALTER TABLE offices ADD COLUMN country TEXT;");
         let _ = self.conn.execute_batch("ALTER TABLE procedure_types ADD COLUMN required_provider_type TEXT;");
+        let _ = self.conn.execute_batch("ALTER TABLE staff_members ADD COLUMN clinical_specialization TEXT;");
         Ok(())
     }
 
@@ -650,188 +645,6 @@ impl ProjectionStore {
         Ok(rows)
     }
 
-    pub fn upsert_provider(&self, row: &ProviderRow) -> Result<()> {
-        self.conn.execute(
-            "INSERT INTO providers (id, name, provider_type, archived)
-             VALUES (?1, ?2, ?3, ?4)
-             ON CONFLICT(id) DO UPDATE SET
-                 name = excluded.name, provider_type = excluded.provider_type,
-                 archived = excluded.archived",
-            params![row.id, row.name, row.provider_type, row.archived as i32],
-        )?;
-        Ok(())
-    }
-
-    pub fn rename_provider(&self, id: &str, new_name: &str) -> Result<()> {
-        self.conn.execute("UPDATE providers SET name = ?2 WHERE id = ?1", params![id, new_name])?;
-        Ok(())
-    }
-
-    pub fn update_provider_type(&self, id: &str, new_type: &str) -> Result<()> {
-        self.conn.execute(
-            "UPDATE providers SET provider_type = ?2 WHERE id = ?1",
-            params![id, new_type],
-        )?;
-        Ok(())
-    }
-
-    pub fn archive_provider(&self, id: &str) -> Result<()> {
-        self.conn.execute("UPDATE providers SET archived = 1 WHERE id = ?1", params![id])?;
-        Ok(())
-    }
-
-    pub fn unarchive_provider(&self, id: &str) -> Result<()> {
-        self.conn.execute("UPDATE providers SET archived = 0 WHERE id = ?1", params![id])?;
-        Ok(())
-    }
-
-    pub fn get_provider(&self, id: &str) -> Result<Option<ProviderRow>> {
-        let r: SqlResult<ProviderRow> = self.conn.query_row(
-            "SELECT id, name, provider_type, archived FROM providers WHERE id = ?1",
-            params![id],
-            |row| Ok(ProviderRow {
-                id: row.get(0)?,
-                name: row.get(1)?,
-                provider_type: row.get(2)?,
-                archived: row.get::<_, i32>(3)? != 0,
-            }),
-        );
-        match r {
-            Ok(v) => Ok(Some(v)),
-            Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
-            Err(e) => Err(e.into()),
-        }
-    }
-
-    pub fn list_providers(&self) -> Result<Vec<ProviderRow>> {
-        let mut stmt = self.conn.prepare(
-            "SELECT id, name, provider_type, archived FROM providers ORDER BY name ASC"
-        )?;
-        let rows = stmt.query_map([], |row| Ok(ProviderRow {
-            id: row.get(0)?,
-            name: row.get(1)?,
-            provider_type: row.get(2)?,
-            archived: row.get::<_, i32>(3)? != 0,
-        }))?.collect::<SqlResult<Vec<_>>>()?;
-        Ok(rows)
-    }
-
-    pub fn add_provider_office_assignment(&self, provider_id: &str, office_id: &str) -> Result<()> {
-        self.conn.execute(
-            "INSERT OR IGNORE INTO provider_office_assignments (provider_id, office_id)
-             VALUES (?1, ?2)",
-            params![provider_id, office_id],
-        )?;
-        Ok(())
-    }
-
-    pub fn remove_provider_office_assignment(&self, provider_id: &str, office_id: &str) -> Result<()> {
-        self.conn.execute(
-            "DELETE FROM provider_office_assignments WHERE provider_id = ?1 AND office_id = ?2",
-            params![provider_id, office_id],
-        )?;
-        Ok(())
-    }
-
-    pub fn list_provider_offices(&self, provider_id: &str) -> Result<Vec<String>> {
-        let mut stmt = self.conn.prepare(
-            "SELECT office_id FROM provider_office_assignments WHERE provider_id = ?1"
-        )?;
-        let ids = stmt.query_map(params![provider_id], |row| row.get(0))?
-            .collect::<SqlResult<Vec<String>>>()?;
-        Ok(ids)
-    }
-
-    pub fn list_providers_for_office(&self, office_id: &str) -> Result<Vec<String>> {
-        let mut stmt = self.conn.prepare(
-            "SELECT provider_id FROM provider_office_assignments WHERE office_id = ?1"
-        )?;
-        let ids = stmt.query_map(params![office_id], |row| row.get(0))?
-            .collect::<SqlResult<Vec<String>>>()?;
-        Ok(ids)
-    }
-
-    pub fn set_provider_availability(&self, row: &ProviderAvailabilityRow) -> Result<()> {
-        self.conn.execute(
-            "INSERT INTO provider_availability
-             (provider_id, office_id, day_of_week, start_time, end_time)
-             VALUES (?1, ?2, ?3, ?4, ?5)
-             ON CONFLICT(provider_id, office_id, day_of_week) DO UPDATE SET
-                 start_time = excluded.start_time, end_time = excluded.end_time",
-            params![row.provider_id, row.office_id, row.day_of_week, row.start_time, row.end_time],
-        )?;
-        Ok(())
-    }
-
-    pub fn delete_provider_availability(&self, provider_id: &str, office_id: &str, day: &str) -> Result<()> {
-        self.conn.execute(
-            "DELETE FROM provider_availability
-             WHERE provider_id = ?1 AND office_id = ?2 AND day_of_week = ?3",
-            params![provider_id, office_id, day],
-        )?;
-        Ok(())
-    }
-
-    pub fn delete_provider_availability_for_office(&self, provider_id: &str, office_id: &str) -> Result<Vec<String>> {
-        let mut stmt = self.conn.prepare(
-            "SELECT day_of_week FROM provider_availability
-             WHERE provider_id = ?1 AND office_id = ?2"
-        )?;
-        let days: Vec<String> = stmt.query_map(params![provider_id, office_id], |row| row.get(0))?
-            .collect::<SqlResult<Vec<String>>>()?;
-        // Note: actual deletion happens via event projection (ProviderAvailabilityCleared)
-        Ok(days)
-    }
-
-    pub fn list_provider_availability(&self, provider_id: &str) -> Result<Vec<ProviderAvailabilityRow>> {
-        let mut stmt = self.conn.prepare(
-            "SELECT provider_id, office_id, day_of_week, start_time, end_time
-             FROM provider_availability WHERE provider_id = ?1"
-        )?;
-        let rows = stmt.query_map(params![provider_id], |row| Ok(ProviderAvailabilityRow {
-            provider_id: row.get(0)?,
-            office_id: row.get(1)?,
-            day_of_week: row.get(2)?,
-            start_time: row.get(3)?,
-            end_time: row.get(4)?,
-        }))?.collect::<SqlResult<Vec<_>>>()?;
-        Ok(rows)
-    }
-
-    pub fn add_provider_exception(&self, row: &ProviderExceptionRow) -> Result<()> {
-        self.conn.execute(
-            "INSERT OR REPLACE INTO provider_exceptions
-             (provider_id, start_date, end_date, reason)
-             VALUES (?1, ?2, ?3, ?4)",
-            params![row.provider_id, row.start_date, row.end_date, row.reason],
-        )?;
-        Ok(())
-    }
-
-    pub fn remove_provider_exception(&self, provider_id: &str, start: &str, end: &str) -> Result<()> {
-        self.conn.execute(
-            "DELETE FROM provider_exceptions
-             WHERE provider_id = ?1 AND start_date = ?2 AND end_date = ?3",
-            params![provider_id, start, end],
-        )?;
-        Ok(())
-    }
-
-    pub fn list_provider_exceptions(&self, provider_id: &str) -> Result<Vec<ProviderExceptionRow>> {
-        let mut stmt = self.conn.prepare(
-            "SELECT provider_id, start_date, end_date, reason
-             FROM provider_exceptions WHERE provider_id = ?1
-             ORDER BY start_date ASC"
-        )?;
-        let rows = stmt.query_map(params![provider_id], |row| Ok(ProviderExceptionRow {
-            provider_id: row.get(0)?,
-            start_date: row.get(1)?,
-            end_date: row.get(2)?,
-            reason: row.get(3)?,
-        }))?.collect::<SqlResult<Vec<_>>>()?;
-        Ok(rows)
-    }
-
     pub fn upsert_procedure_type(&self, row: &ProcedureTypeRow) -> Result<()> {
         self.conn.execute(
             "INSERT INTO procedure_types (id, name, category, default_duration_minutes, is_active, required_provider_type)
@@ -925,14 +738,16 @@ impl ProjectionStore {
     pub fn upsert_staff_member(&self, row: &StaffMemberRow) -> Result<()> {
         self.conn.execute(
             "INSERT INTO staff_members
-             (staff_member_id, name, phone, email, preferred_contact_channel, pin_hash, archived)
-             VALUES (?1,?2,?3,?4,?5,?6,?7)
+             (staff_member_id, name, phone, email, preferred_contact_channel, pin_hash, archived, clinical_specialization)
+             VALUES (?1,?2,?3,?4,?5,?6,?7,?8)
              ON CONFLICT(staff_member_id) DO UPDATE SET
                  name = excluded.name, phone = excluded.phone, email = excluded.email,
                  preferred_contact_channel = excluded.preferred_contact_channel,
-                 pin_hash = excluded.pin_hash, archived = excluded.archived",
+                 pin_hash = excluded.pin_hash, archived = excluded.archived,
+                 clinical_specialization = excluded.clinical_specialization",
             params![row.staff_member_id, row.name, row.phone, row.email,
-                    row.preferred_contact_channel, row.pin_hash, row.archived as i32],
+                    row.preferred_contact_channel, row.pin_hash, row.archived as i32,
+                    row.clinical_specialization],
         )?;
         Ok(())
     }
@@ -980,7 +795,7 @@ impl ProjectionStore {
 
     pub fn get_staff_member(&self, staff_member_id: &str) -> Result<Option<StaffMemberRow>> {
         let r: SqlResult<StaffMemberRow> = self.conn.query_row(
-            "SELECT staff_member_id, name, phone, email, preferred_contact_channel, pin_hash, archived
+            "SELECT staff_member_id, name, phone, email, preferred_contact_channel, pin_hash, archived, clinical_specialization
              FROM staff_members WHERE staff_member_id = ?1",
             params![staff_member_id],
             |row| Ok(StaffMemberRow {
@@ -991,6 +806,7 @@ impl ProjectionStore {
                 preferred_contact_channel: row.get(4)?,
                 pin_hash: row.get(5)?,
                 archived: row.get::<_, i32>(6)? != 0,
+                clinical_specialization: row.get(7)?,
             }),
         );
         match r {
@@ -1002,7 +818,7 @@ impl ProjectionStore {
 
     pub fn list_staff_members(&self) -> Result<Vec<StaffMemberRow>> {
         let mut stmt = self.conn.prepare(
-            "SELECT staff_member_id, name, phone, email, preferred_contact_channel, pin_hash, archived
+            "SELECT staff_member_id, name, phone, email, preferred_contact_channel, pin_hash, archived, clinical_specialization
              FROM staff_members ORDER BY name ASC"
         )?;
         let rows = stmt.query_map([], |row| Ok(StaffMemberRow {
@@ -1013,6 +829,7 @@ impl ProjectionStore {
             preferred_contact_channel: row.get(4)?,
             pin_hash: row.get(5)?,
             archived: row.get::<_, i32>(6)? != 0,
+            clinical_specialization: row.get(7)?,
         }))?.collect::<SqlResult<Vec<_>>>()?;
         Ok(rows)
     }
@@ -1039,6 +856,125 @@ impl ProjectionStore {
             |row| row.get(0),
         )?;
         Ok(count > 0)
+    }
+
+    // ── Staff Clinical / Provider rows ────────────────────────────────────────
+
+    pub fn update_staff_clinical_specialization(&self, staff_member_id: &str, specialization: &str) -> Result<()> {
+        self.conn.execute(
+            "UPDATE staff_members SET clinical_specialization = ?2 WHERE staff_member_id = ?1",
+            params![staff_member_id, specialization],
+        )?;
+        Ok(())
+    }
+
+    pub fn add_staff_office_assignment(&self, staff_member_id: &str, office_id: &str) -> Result<()> {
+        self.conn.execute(
+            "INSERT OR IGNORE INTO staff_office_assignments (staff_member_id, office_id) VALUES (?1, ?2)",
+            params![staff_member_id, office_id],
+        )?;
+        Ok(())
+    }
+
+    pub fn remove_staff_office_assignment(&self, staff_member_id: &str, office_id: &str) -> Result<()> {
+        self.conn.execute(
+            "DELETE FROM staff_office_assignments WHERE staff_member_id = ?1 AND office_id = ?2",
+            params![staff_member_id, office_id],
+        )?;
+        Ok(())
+    }
+
+    pub fn list_staff_offices(&self, staff_member_id: &str) -> Result<Vec<String>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT office_id FROM staff_office_assignments WHERE staff_member_id = ?1"
+        )?;
+        let ids = stmt.query_map(params![staff_member_id], |row| row.get(0))?
+            .collect::<SqlResult<Vec<String>>>()?;
+        Ok(ids)
+    }
+
+    pub fn list_staff_for_office(&self, office_id: &str) -> Result<Vec<String>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT staff_member_id FROM staff_office_assignments WHERE office_id = ?1"
+        )?;
+        let ids = stmt.query_map(params![office_id], |row| row.get(0))?
+            .collect::<SqlResult<Vec<String>>>()?;
+        Ok(ids)
+    }
+
+    pub fn set_staff_availability(&self, row: &StaffAvailabilityRow) -> Result<()> {
+        self.conn.execute(
+            "INSERT INTO staff_availability (staff_member_id, office_id, day_of_week, start_time, end_time)
+             VALUES (?1, ?2, ?3, ?4, ?5)
+             ON CONFLICT(staff_member_id, office_id, day_of_week) DO UPDATE SET
+                 start_time = excluded.start_time, end_time = excluded.end_time",
+            params![row.staff_member_id, row.office_id, row.day_of_week, row.start_time, row.end_time],
+        )?;
+        Ok(())
+    }
+
+    pub fn delete_staff_availability(&self, staff_member_id: &str, office_id: &str, day_of_week: &str) -> Result<()> {
+        self.conn.execute(
+            "DELETE FROM staff_availability WHERE staff_member_id = ?1 AND office_id = ?2 AND day_of_week = ?3",
+            params![staff_member_id, office_id, day_of_week],
+        )?;
+        Ok(())
+    }
+
+    /// Returns day_of_week strings for all availability windows at a specific office.
+    pub fn list_staff_availability_for_office(&self, staff_member_id: &str, office_id: &str) -> Result<Vec<String>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT day_of_week FROM staff_availability WHERE staff_member_id = ?1 AND office_id = ?2"
+        )?;
+        let days = stmt.query_map(params![staff_member_id, office_id], |row| row.get(0))?
+            .collect::<SqlResult<Vec<String>>>()?;
+        Ok(days)
+    }
+
+    pub fn list_staff_availability(&self, staff_member_id: &str) -> Result<Vec<StaffAvailabilityRow>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT staff_member_id, office_id, day_of_week, start_time, end_time
+             FROM staff_availability WHERE staff_member_id = ?1"
+        )?;
+        let rows = stmt.query_map(params![staff_member_id], |row| Ok(StaffAvailabilityRow {
+            staff_member_id: row.get(0)?,
+            office_id: row.get(1)?,
+            day_of_week: row.get(2)?,
+            start_time: row.get(3)?,
+            end_time: row.get(4)?,
+        }))?.collect::<SqlResult<Vec<_>>>()?;
+        Ok(rows)
+    }
+
+    pub fn add_staff_exception(&self, row: &StaffExceptionRow) -> Result<()> {
+        self.conn.execute(
+            "INSERT OR REPLACE INTO staff_exceptions (staff_member_id, start_date, end_date, reason)
+             VALUES (?1, ?2, ?3, ?4)",
+            params![row.staff_member_id, row.start_date, row.end_date, row.reason],
+        )?;
+        Ok(())
+    }
+
+    pub fn remove_staff_exception(&self, staff_member_id: &str, start_date: &str, end_date: &str) -> Result<()> {
+        self.conn.execute(
+            "DELETE FROM staff_exceptions WHERE staff_member_id = ?1 AND start_date = ?2 AND end_date = ?3",
+            params![staff_member_id, start_date, end_date],
+        )?;
+        Ok(())
+    }
+
+    pub fn list_staff_exceptions(&self, staff_member_id: &str) -> Result<Vec<StaffExceptionRow>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT staff_member_id, start_date, end_date, reason
+             FROM staff_exceptions WHERE staff_member_id = ?1 ORDER BY start_date ASC"
+        )?;
+        let rows = stmt.query_map(params![staff_member_id], |row| Ok(StaffExceptionRow {
+            staff_member_id: row.get(0)?,
+            start_date: row.get(1)?,
+            end_date: row.get(2)?,
+            reason: row.get(3)?,
+        }))?.collect::<SqlResult<Vec<_>>>()?;
+        Ok(rows)
     }
 
     // ── Patient Management rows ───────────────────────────────────────────────
@@ -1260,7 +1196,7 @@ impl ProjectionStore {
                  appointment_id, office_id, patient_id, patient_name, patient_phone,
                  patient_email, preferred_contact_channel,
                  procedure_type_id, procedure_name, procedure_category,
-                 provider_id, provider_name,
+                 staff_member_id, provider_name,
                  start_time, end_time, duration_minutes,
                  status, rescheduled_to_id, rescheduled_from_id, booked_by)
              VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17,?18,?19)",
@@ -1268,7 +1204,7 @@ impl ProjectionStore {
                 row.appointment_id, row.office_id, row.patient_id, row.patient_name,
                 row.patient_phone, row.patient_email, row.preferred_contact_channel,
                 row.procedure_type_id, row.procedure_name, row.procedure_category,
-                row.provider_id, row.provider_name,
+                row.staff_member_id, row.provider_name,
                 row.start_time, row.end_time, row.duration_minutes,
                 row.status, row.rescheduled_to_id, row.rescheduled_from_id, row.booked_by
             ],
@@ -1295,7 +1231,7 @@ impl ProjectionStore {
             "SELECT appointment_id, office_id, patient_id, patient_name, patient_phone,
                     patient_email, preferred_contact_channel,
                     procedure_type_id, procedure_name, procedure_category,
-                    provider_id, provider_name,
+                    staff_member_id, provider_name,
                     start_time, end_time, duration_minutes,
                     status, rescheduled_to_id, rescheduled_from_id, booked_by
              FROM appointment_list WHERE appointment_id = ?1",
@@ -1311,7 +1247,7 @@ impl ProjectionStore {
                 procedure_type_id: row.get(7)?,
                 procedure_name: row.get(8)?,
                 procedure_category: row.get(9)?,
-                provider_id: row.get(10)?,
+                staff_member_id: row.get(10)?,
                 provider_name: row.get(11)?,
                 start_time: row.get(12)?,
                 end_time: row.get(13)?,
@@ -1341,7 +1277,7 @@ impl ProjectionStore {
             procedure_type_id: row.get(7)?,
             procedure_name: row.get(8)?,
             procedure_category: row.get(9)?,
-            provider_id: row.get(10)?,
+            staff_member_id: row.get(10)?,
             provider_name: row.get(11)?,
             start_time: row.get(12)?,
             end_time: row.get(13)?,
@@ -1365,7 +1301,7 @@ impl ProjectionStore {
             "SELECT appointment_id, office_id, patient_id, patient_name, patient_phone,
                     patient_email, preferred_contact_channel,
                     procedure_type_id, procedure_name, procedure_category,
-                    provider_id, provider_name,
+                    staff_member_id, provider_name,
                     start_time, end_time, duration_minutes,
                     status, rescheduled_to_id, rescheduled_from_id, booked_by
              FROM appointment_list
@@ -1437,7 +1373,7 @@ impl ProjectionStore {
             "SELECT appointment_id, office_id, patient_id, patient_name, patient_phone,
                     patient_email, preferred_contact_channel,
                     procedure_type_id, procedure_name, procedure_category,
-                    provider_id, provider_name,
+                    staff_member_id, provider_name,
                     start_time, end_time, duration_minutes,
                     status, rescheduled_to_id, rescheduled_from_id, booked_by
              FROM appointment_list
@@ -1449,11 +1385,11 @@ impl ProjectionStore {
         Ok(rows)
     }
 
-    /// Returns all appointments for a provider within a datetime range (inclusive).
+    /// Returns all appointments for a provider (staff member) within a datetime range (inclusive).
     /// `start_dt` and `end_dt` are full datetime strings: "YYYY-MM-DDTHH:MM:SS".
     pub fn list_appointments_for_provider_in_range(
         &self,
-        provider_id: &str,
+        staff_member_id: &str,
         start_dt: &str,
         end_dt: &str,
     ) -> Result<Vec<AppointmentRow>> {
@@ -1461,14 +1397,14 @@ impl ProjectionStore {
             "SELECT appointment_id, office_id, patient_id, patient_name, patient_phone,
                     patient_email, preferred_contact_channel,
                     procedure_type_id, procedure_name, procedure_category,
-                    provider_id, provider_name,
+                    staff_member_id, provider_name,
                     start_time, end_time, duration_minutes,
                     status, rescheduled_to_id, rescheduled_from_id, booked_by
              FROM appointment_list
-             WHERE provider_id = ?1 AND start_time >= ?2 AND start_time <= ?3
+             WHERE staff_member_id = ?1 AND start_time >= ?2 AND start_time <= ?3
              ORDER BY start_time ASC",
         )?;
-        let rows = stmt.query_map(params![provider_id, start_dt, end_dt], Self::map_appointment_row)?
+        let rows = stmt.query_map(params![staff_member_id, start_dt, end_dt], Self::map_appointment_row)?
             .collect::<SqlResult<Vec<_>>>()?;
         Ok(rows)
     }

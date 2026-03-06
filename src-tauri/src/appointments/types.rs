@@ -20,7 +20,7 @@ pub struct AppointmentDto {
     pub procedure_type_id: String,
     pub procedure_name: String,
     pub procedure_category: String,
-    pub provider_id: String,
+    pub staff_member_id: String,
     pub provider_name: String,
     pub start_time: String,
     pub end_time: String,

@@ -12,6 +12,25 @@ pub struct StaffMemberDto {
     pub has_pin: bool,
     pub roles: Vec<String>,
     pub archived: bool,
+    pub clinical_specialization: Option<String>,
+    pub office_ids: Vec<String>,
+    pub availability: Vec<AvailabilityWindowDto>,
+    pub exceptions: Vec<AvailabilityExceptionDto>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+pub struct AvailabilityWindowDto {
+    pub office_id: String,
+    pub day_of_week: String,
+    pub start_time: String,
+    pub end_time: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+pub struct AvailabilityExceptionDto {
+    pub start_date: String,
+    pub end_date: String,
+    pub reason: Option<String>,
 }
 
 /// Returns whether the Staff Management setup step is complete.

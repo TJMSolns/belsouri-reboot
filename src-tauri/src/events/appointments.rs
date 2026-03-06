@@ -22,7 +22,7 @@ pub struct AppointmentBookedPayload {
     pub office_id: String,
     pub patient_id: String,
     pub procedure_type_id: String,
-    pub provider_id: String,
+    pub staff_member_id: String,
     /// Local datetime "YYYY-MM-DDTHH:MM:SS"
     pub start_time: String,
     /// Local datetime "YYYY-MM-DDTHH:MM:SS", computed: start + duration

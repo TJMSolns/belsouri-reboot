@@ -2,7 +2,7 @@
 /// All functions are side-effect-free and testable without a database.
 
 use chrono::{NaiveDateTime, Duration, Datelike};
-use crate::db::{OfficeHoursRow, ProviderAvailabilityRow, ProviderExceptionRow};
+use crate::db::{OfficeHoursRow, StaffAvailabilityRow, StaffExceptionRow};
 
 pub fn validate_duration(minutes: u32) -> Result<(), String> {
     if minutes < 15 || minutes > 240 {
@@ -65,8 +65,8 @@ pub fn check_c1_office_open(
 
 /// C2: Provider is available at that office at that time (no exception, within availability window).
 pub fn check_c2_provider_available(
-    availability: &[ProviderAvailabilityRow],
-    exceptions: &[ProviderExceptionRow],
+    availability: &[StaffAvailabilityRow],
+    exceptions: &[StaffExceptionRow],
     provider_name: &str,
     office_id: &str,
     office_name: &str,
@@ -153,7 +153,7 @@ pub fn validate_recorded_by(recorded_by: &str) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::db::{OfficeHoursRow, ProviderAvailabilityRow, ProviderExceptionRow};
+    use crate::db::{OfficeHoursRow, StaffAvailabilityRow, StaffExceptionRow};
 
     fn make_hours(day: &str, open: &str, close: &str) -> OfficeHoursRow {
         OfficeHoursRow {
@@ -164,9 +164,9 @@ mod tests {
         }
     }
 
-    fn make_avail(office_id: &str, day: &str, start: &str, end: &str) -> ProviderAvailabilityRow {
-        ProviderAvailabilityRow {
-            provider_id: "p1".to_string(),
+    fn make_avail(office_id: &str, day: &str, start: &str, end: &str) -> StaffAvailabilityRow {
+        StaffAvailabilityRow {
+            staff_member_id: "sm-1".to_string(),
             office_id: office_id.to_string(),
             day_of_week: day.to_string(),
             start_time: start.to_string(),
@@ -275,8 +275,8 @@ mod tests {
     #[test]
     fn test_c2_active_exception() {
         let avail = vec![make_avail("o1", "Monday", "09:00", "16:00")];
-        let exc = vec![ProviderExceptionRow {
-            provider_id: "p1".to_string(),
+        let exc = vec![StaffExceptionRow {
+            staff_member_id: "sm-1".to_string(),
             start_date: "2026-03-09".to_string(),
             end_date: "2026-03-09".to_string(),
             reason: None,

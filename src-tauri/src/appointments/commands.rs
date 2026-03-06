@@ -113,7 +113,7 @@ fn row_to_dto(row: &crate::db::AppointmentRow) -> AppointmentDto {
         procedure_type_id: row.procedure_type_id.clone(),
         procedure_name: row.procedure_name.clone(),
         procedure_category: row.procedure_category.clone(),
-        provider_id: row.provider_id.clone(),
+        staff_member_id: row.staff_member_id.clone(),
         provider_name: row.provider_name.clone(),
         start_time: row.start_time.clone(),
         end_time: row.end_time.clone(),
@@ -142,7 +142,7 @@ fn check_booking_constraints(
     office_id: &str,
     patient_id: &str,
     procedure_type_id: &str,
-    provider_id: &str,
+    staff_member_id: &str,
     start_time: &str,
     duration_minutes: u32,
     exclude_appointment_id: Option<&str>,
@@ -159,10 +159,10 @@ fn check_booking_constraints(
         let office = proj.get_office(office_id).map_err(|e| e.to_string())?
             .ok_or_else(|| format!("Office {} not found", office_id))?;
         let office_hours = proj.list_office_hours(office_id).map_err(|e| e.to_string())?;
-        let provider = proj.get_provider(provider_id).map_err(|e| e.to_string())?
-            .ok_or_else(|| format!("Provider {} not found", provider_id))?;
-        let avail = proj.list_provider_availability(provider_id).map_err(|e| e.to_string())?;
-        let exceptions = proj.list_provider_exceptions(provider_id).map_err(|e| e.to_string())?;
+        let provider = proj.get_staff_member(staff_member_id).map_err(|e| e.to_string())?
+            .ok_or_else(|| format!("Provider (staff member) {} not found", staff_member_id))?;
+        let avail = proj.list_staff_availability(staff_member_id).map_err(|e| e.to_string())?;
+        let exceptions = proj.list_staff_exceptions(staff_member_id).map_err(|e| e.to_string())?;
         let patient = proj.get_patient(patient_id).map_err(|e| e.to_string())?
             .ok_or_else(|| format!("Patient {} not found", patient_id))?;
         let procedure = proj.get_procedure_type(procedure_type_id).map_err(|e| e.to_string())?
@@ -188,10 +188,12 @@ fn check_booking_constraints(
     service::check_c5_procedure_active(procedure.is_active, &procedure.name)?;
     // C7: Provider capability / scope of practice (hard block — no override)
     if let Some(ref req) = procedure.required_provider_type {
-        if capability_level(&provider.provider_type) < capability_level(req) {
+        let provider_specialization = provider.clinical_specialization.as_deref().unwrap_or("");
+        if capability_level(provider_specialization) < capability_level(req) {
             return Err(format!(
                 "{} requires a {} or higher. {} is a {} and is not eligible for this procedure.",
-                procedure.name, req, provider.name, provider.provider_type
+                procedure.name, req, provider.name,
+                provider.clinical_specialization.as_deref().unwrap_or("unspecified")
             ));
         }
     }
@@ -208,7 +210,7 @@ pub async fn book_appointment(
     office_id: String,
     patient_id: String,
     procedure_type_id: String,
-    provider_id: String,
+    staff_member_id: String,
     start_time: String,
     duration_minutes: Option<u32>,
     booked_by: String,
@@ -229,7 +231,7 @@ pub async fn book_appointment(
 
     // Run all 5 constraints — returns end_time
     let end_time = check_booking_constraints(
-        &state, &office_id, &patient_id, &procedure_type_id, &provider_id,
+        &state, &office_id, &patient_id, &procedure_type_id, &staff_member_id,
         &start_time, final_duration, None,
     )?;
 
@@ -241,7 +243,7 @@ pub async fn book_appointment(
         office_id,
         patient_id,
         procedure_type_id,
-        provider_id,
+        staff_member_id,
         start_time,
         end_time,
         duration_minutes: final_duration,
@@ -259,7 +261,7 @@ pub async fn reschedule_appointment(
     state: State<'_, AppState>,
     appointment_id: String,
     new_office_id: String,
-    new_provider_id: String,
+    new_staff_member_id: String,
     new_start_time: String,
     new_duration_minutes: Option<u32>,
     rescheduled_by: String,
@@ -283,7 +285,7 @@ pub async fn reschedule_appointment(
 
     // Run all 5 constraints on the new slot
     let new_end_time = check_booking_constraints(
-        &state, &new_office_id, &patient_id, &procedure_type_id, &new_provider_id,
+        &state, &new_office_id, &patient_id, &procedure_type_id, &new_staff_member_id,
         &new_start_time, final_duration, None,
     )?;
 
@@ -304,7 +306,7 @@ pub async fn reschedule_appointment(
         office_id: new_office_id,
         patient_id,
         procedure_type_id,
-        provider_id: new_provider_id,
+        staff_member_id: new_staff_member_id,
         start_time: new_start_time,
         end_time: new_end_time,
         duration_minutes: final_duration,
@@ -498,7 +500,7 @@ pub async fn get_appointment(
 #[tauri::command]
 pub async fn get_provider_schedule(
     state: State<'_, AppState>,
-    provider_id: String,
+    staff_member_id: String,
     start_date: String,
     end_date: String,
 ) -> Result<Vec<AppointmentDto>, String> {
@@ -506,7 +508,7 @@ pub async fn get_provider_schedule(
     let end_dt   = format!("{}T23:59:59", end_date);
     do_rebuild(&state)?;
     let proj = state.projections.lock().map_err(|e| e.to_string())?;
-    let rows = proj.list_appointments_for_provider_in_range(&provider_id, &start_dt, &end_dt)
+    let rows = proj.list_appointments_for_provider_in_range(&staff_member_id, &start_dt, &end_dt)
         .map_err(|e| e.to_string())?;
     Ok(rows.iter().map(row_to_dto).collect())
 }

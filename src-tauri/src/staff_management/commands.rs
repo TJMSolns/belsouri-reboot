@@ -15,9 +15,19 @@ fn do_rebuild(state: &AppState) -> Result<(), String> {
 
 fn build_dto(state: &AppState, staff_member_id: &str) -> Result<StaffMemberDto, String> {
     let proj = state.projections.lock().map_err(|e| e.to_string())?;
+    build_dto_from_proj(&proj, staff_member_id)
+}
+
+fn build_dto_from_proj(
+    proj: &std::sync::MutexGuard<'_, crate::db::ProjectionStore>,
+    staff_member_id: &str,
+) -> Result<StaffMemberDto, String> {
     let row = proj.get_staff_member(staff_member_id).map_err(|e| e.to_string())?
         .ok_or_else(|| "Staff member not found".to_string())?;
     let roles = proj.list_staff_roles(staff_member_id).map_err(|e| e.to_string())?;
+    let office_ids = proj.list_staff_offices(staff_member_id).map_err(|e| e.to_string())?;
+    let avail = proj.list_staff_availability(staff_member_id).map_err(|e| e.to_string())?;
+    let exceptions = proj.list_staff_exceptions(staff_member_id).map_err(|e| e.to_string())?;
     Ok(StaffMemberDto {
         staff_member_id: row.staff_member_id,
         name: row.name,
@@ -27,6 +37,19 @@ fn build_dto(state: &AppState, staff_member_id: &str) -> Result<StaffMemberDto, 
         has_pin: row.pin_hash.is_some(),
         roles,
         archived: row.archived,
+        clinical_specialization: row.clinical_specialization,
+        office_ids,
+        availability: avail.into_iter().map(|a| AvailabilityWindowDto {
+            office_id: a.office_id,
+            day_of_week: a.day_of_week,
+            start_time: a.start_time,
+            end_time: a.end_time,
+        }).collect(),
+        exceptions: exceptions.into_iter().map(|e| AvailabilityExceptionDto {
+            start_date: e.start_date,
+            end_date: e.end_date,
+            reason: e.reason,
+        }).collect(),
     })
 }
 
@@ -451,18 +474,8 @@ pub fn list_staff_members(
     let proj = state.projections.lock().map_err(|e| e.to_string())?;
     let rows = proj.list_staff_members().map_err(|e| e.to_string())?;
     let mut dtos = Vec::with_capacity(rows.len());
-    for row in rows {
-        let roles = proj.list_staff_roles(&row.staff_member_id).map_err(|e| e.to_string())?;
-        dtos.push(StaffMemberDto {
-            has_pin: row.pin_hash.is_some(),
-            staff_member_id: row.staff_member_id,
-            name: row.name,
-            phone: row.phone,
-            email: row.email,
-            preferred_contact_channel: row.preferred_contact_channel,
-            roles,
-            archived: row.archived,
-        });
+    for row in &rows {
+        dtos.push(build_dto_from_proj(&proj, &row.staff_member_id)?);
     }
     Ok(dtos)
 }
@@ -487,4 +500,346 @@ pub fn get_staff_setup_status(
     let proj = state.projections.lock().map_err(|e| e.to_string())?;
     let complete = proj.has_active_pm_with_pin().map_err(|e| e.to_string())?;
     Ok(StaffSetupStatusDto { complete })
+}
+
+// ── Provider clinical commands ─────────────────────────────────────────────────
+
+/// Set the clinical specialization of a Provider-role staff member.
+#[tauri::command]
+#[specta::specta]
+pub fn set_provider_type(
+    state: State<'_, AppState>,
+    staff_member_id: String,
+    clinical_specialization: String,
+) -> Result<StaffMemberDto, String> {
+    validate_clinical_specialization(&clinical_specialization)?;
+    do_rebuild(&state)?;
+
+    {
+        let proj = state.projections.lock().map_err(|e| e.to_string())?;
+        let row = proj.get_staff_member(&staff_member_id).map_err(|e| e.to_string())?
+            .ok_or_else(|| "Staff member not found".to_string())?;
+        if row.archived {
+            return Err("Cannot modify an archived staff member".to_string());
+        }
+        let roles = proj.list_staff_roles(&staff_member_id).map_err(|e| e.to_string())?;
+        if !roles.contains(&"Provider".to_string()) {
+            return Err("Staff member does not hold the Provider role".to_string());
+        }
+    }
+
+    let payload = crate::events::staff_management::ProviderTypeSetPayload {
+        staff_member_id: staff_member_id.clone(),
+        clinical_specialization,
+    };
+    let stream_id = staff_stream(&staff_member_id);
+    {
+        let events = state.events.lock().map_err(|e| e.to_string())?;
+        let ver = events.current_version(&stream_id).map_err(|e| e.to_string())?;
+        events.append(&stream_id, ver, PROVIDER_TYPE_SET,
+            &serde_json::to_string(&payload).map_err(|e| e.to_string())?)
+            .map_err(|e| e.to_string())?;
+    }
+
+    do_rebuild(&state)?;
+    build_dto(&state, &staff_member_id)
+}
+
+/// Assign a Provider-role staff member to an office.
+#[tauri::command]
+#[specta::specta]
+pub fn assign_provider_to_office(
+    state: State<'_, AppState>,
+    staff_member_id: String,
+    office_id: String,
+) -> Result<StaffMemberDto, String> {
+    do_rebuild(&state)?;
+
+    {
+        let proj = state.projections.lock().map_err(|e| e.to_string())?;
+        let row = proj.get_staff_member(&staff_member_id).map_err(|e| e.to_string())?
+            .ok_or_else(|| "Staff member not found".to_string())?;
+        if row.archived {
+            return Err("Cannot modify an archived staff member".to_string());
+        }
+        let roles = proj.list_staff_roles(&staff_member_id).map_err(|e| e.to_string())?;
+        if !roles.contains(&"Provider".to_string()) {
+            return Err("Staff member does not hold the Provider role".to_string());
+        }
+        let office = proj.get_office(&office_id).map_err(|e| e.to_string())?
+            .ok_or_else(|| format!("Office '{}' not found", office_id))?;
+        if office.archived {
+            return Err(format!("Office '{}' is archived", office_id));
+        }
+        let current_offices = proj.list_staff_offices(&staff_member_id).map_err(|e| e.to_string())?;
+        if current_offices.contains(&office_id) {
+            return Err(format!("Provider is already assigned to office '{}'", office_id));
+        }
+    }
+
+    let payload = crate::events::staff_management::ProviderAssignedToOfficePayload {
+        staff_member_id: staff_member_id.clone(),
+        office_id,
+    };
+    let stream_id = staff_stream(&staff_member_id);
+    {
+        let events = state.events.lock().map_err(|e| e.to_string())?;
+        let ver = events.current_version(&stream_id).map_err(|e| e.to_string())?;
+        events.append(&stream_id, ver, PROVIDER_ASSIGNED_TO_OFFICE,
+            &serde_json::to_string(&payload).map_err(|e| e.to_string())?)
+            .map_err(|e| e.to_string())?;
+    }
+
+    do_rebuild(&state)?;
+    build_dto(&state, &staff_member_id)
+}
+
+/// Remove a Provider-role staff member from an office (also clears their availability for that office).
+#[tauri::command]
+#[specta::specta]
+pub fn remove_provider_from_office(
+    state: State<'_, AppState>,
+    staff_member_id: String,
+    office_id: String,
+) -> Result<StaffMemberDto, String> {
+    do_rebuild(&state)?;
+
+    let days_to_clear: Vec<String> = {
+        let proj = state.projections.lock().map_err(|e| e.to_string())?;
+        let current_offices = proj.list_staff_offices(&staff_member_id).map_err(|e| e.to_string())?;
+        if !current_offices.contains(&office_id) {
+            return Err(format!("Provider is not assigned to office '{}'", office_id));
+        }
+        proj.list_staff_availability_for_office(&staff_member_id, &office_id)
+            .map_err(|e| e.to_string())?
+    };
+
+    let stream_id = staff_stream(&staff_member_id);
+    {
+        let events = state.events.lock().map_err(|e| e.to_string())?;
+        let mut ver = events.current_version(&stream_id).map_err(|e| e.to_string())?;
+        let json = serde_json::to_string(&crate::events::staff_management::ProviderRemovedFromOfficePayload {
+            staff_member_id: staff_member_id.clone(),
+            office_id: office_id.clone(),
+        }).map_err(|e| e.to_string())?;
+        events.append(&stream_id, ver, PROVIDER_REMOVED_FROM_OFFICE, &json)
+            .map_err(|e| e.to_string())?;
+        ver += 1;
+        for day in &days_to_clear {
+            let json = serde_json::to_string(&crate::events::staff_management::ProviderAvailabilityClearedPayload {
+                staff_member_id: staff_member_id.clone(),
+                office_id: office_id.clone(),
+                day_of_week: day.clone(),
+            }).map_err(|e| e.to_string())?;
+            events.append(&stream_id, ver, PROVIDER_AVAILABILITY_CLEARED, &json)
+                .map_err(|e| e.to_string())?;
+            ver += 1;
+        }
+    }
+
+    do_rebuild(&state)?;
+    build_dto(&state, &staff_member_id)
+}
+
+/// Set a provider's availability window for a specific office and day.
+#[tauri::command]
+#[specta::specta]
+pub fn set_provider_availability(
+    state: State<'_, AppState>,
+    staff_member_id: String,
+    office_id: String,
+    day_of_week: String,
+    start_time: String,
+    end_time: String,
+) -> Result<StaffMemberDto, String> {
+    validate_hhmm(&start_time)?;
+    validate_hhmm(&end_time)?;
+    validate_time_range(&start_time, &end_time)?;
+    do_rebuild(&state)?;
+
+    {
+        let proj = state.projections.lock().map_err(|e| e.to_string())?;
+        let row = proj.get_staff_member(&staff_member_id).map_err(|e| e.to_string())?
+            .ok_or_else(|| "Staff member not found".to_string())?;
+        if row.archived {
+            return Err("Cannot modify an archived staff member".to_string());
+        }
+        let roles = proj.list_staff_roles(&staff_member_id).map_err(|e| e.to_string())?;
+        if !roles.contains(&"Provider".to_string()) {
+            return Err("Staff member does not hold the Provider role".to_string());
+        }
+        let current_offices = proj.list_staff_offices(&staff_member_id).map_err(|e| e.to_string())?;
+        if !current_offices.contains(&office_id) {
+            return Err(format!("Provider is not assigned to office '{}'", office_id));
+        }
+        let avail = proj.list_staff_availability(&staff_member_id).map_err(|e| e.to_string())?;
+        check_no_cross_office_overlap(&avail, &office_id, &day_of_week, &start_time, &end_time)?;
+    }
+
+    let payload = crate::events::staff_management::ProviderAvailabilitySetPayload {
+        staff_member_id: staff_member_id.clone(),
+        office_id,
+        day_of_week,
+        start_time,
+        end_time,
+    };
+    let stream_id = staff_stream(&staff_member_id);
+    {
+        let events = state.events.lock().map_err(|e| e.to_string())?;
+        let ver = events.current_version(&stream_id).map_err(|e| e.to_string())?;
+        events.append(&stream_id, ver, PROVIDER_AVAILABILITY_SET,
+            &serde_json::to_string(&payload).map_err(|e| e.to_string())?)
+            .map_err(|e| e.to_string())?;
+    }
+
+    do_rebuild(&state)?;
+    build_dto(&state, &staff_member_id)
+}
+
+/// Clear a provider's availability window for a specific office and day.
+#[tauri::command]
+#[specta::specta]
+pub fn clear_provider_availability(
+    state: State<'_, AppState>,
+    staff_member_id: String,
+    office_id: String,
+    day_of_week: String,
+) -> Result<StaffMemberDto, String> {
+    do_rebuild(&state)?;
+
+    {
+        let proj = state.projections.lock().map_err(|e| e.to_string())?;
+        let avail = proj.list_staff_availability(&staff_member_id).map_err(|e| e.to_string())?;
+        let has = avail.iter().any(|a| a.office_id == office_id && a.day_of_week == day_of_week);
+        if !has {
+            return Err(format!(
+                "Provider has no availability for office '{}' on {}",
+                office_id, day_of_week
+            ));
+        }
+    }
+
+    let payload = crate::events::staff_management::ProviderAvailabilityClearedPayload {
+        staff_member_id: staff_member_id.clone(),
+        office_id,
+        day_of_week,
+    };
+    let stream_id = staff_stream(&staff_member_id);
+    {
+        let events = state.events.lock().map_err(|e| e.to_string())?;
+        let ver = events.current_version(&stream_id).map_err(|e| e.to_string())?;
+        events.append(&stream_id, ver, PROVIDER_AVAILABILITY_CLEARED,
+            &serde_json::to_string(&payload).map_err(|e| e.to_string())?)
+            .map_err(|e| e.to_string())?;
+    }
+
+    do_rebuild(&state)?;
+    build_dto(&state, &staff_member_id)
+}
+
+/// Set a provider availability exception (time-off block).
+#[tauri::command]
+#[specta::specta]
+pub fn set_provider_exception(
+    state: State<'_, AppState>,
+    staff_member_id: String,
+    start_date: String,
+    end_date: String,
+    reason: Option<String>,
+) -> Result<StaffMemberDto, String> {
+    validate_date_ymd(&start_date)?;
+    validate_date_ymd(&end_date)?;
+    validate_date_range(&start_date, &end_date)?;
+    do_rebuild(&state)?;
+
+    {
+        let proj = state.projections.lock().map_err(|e| e.to_string())?;
+        let row = proj.get_staff_member(&staff_member_id).map_err(|e| e.to_string())?
+            .ok_or_else(|| "Staff member not found".to_string())?;
+        if row.archived {
+            return Err("Cannot modify an archived staff member".to_string());
+        }
+        let roles = proj.list_staff_roles(&staff_member_id).map_err(|e| e.to_string())?;
+        if !roles.contains(&"Provider".to_string()) {
+            return Err("Staff member does not hold the Provider role".to_string());
+        }
+    }
+
+    let payload = crate::events::staff_management::ProviderExceptionSetPayload {
+        staff_member_id: staff_member_id.clone(),
+        start_date,
+        end_date,
+        reason,
+    };
+    let stream_id = staff_stream(&staff_member_id);
+    {
+        let events = state.events.lock().map_err(|e| e.to_string())?;
+        let ver = events.current_version(&stream_id).map_err(|e| e.to_string())?;
+        events.append(&stream_id, ver, PROVIDER_EXCEPTION_SET,
+            &serde_json::to_string(&payload).map_err(|e| e.to_string())?)
+            .map_err(|e| e.to_string())?;
+    }
+
+    do_rebuild(&state)?;
+    build_dto(&state, &staff_member_id)
+}
+
+/// Remove a provider availability exception.
+#[tauri::command]
+#[specta::specta]
+pub fn remove_provider_exception(
+    state: State<'_, AppState>,
+    staff_member_id: String,
+    start_date: String,
+    end_date: String,
+) -> Result<StaffMemberDto, String> {
+    do_rebuild(&state)?;
+
+    {
+        let proj = state.projections.lock().map_err(|e| e.to_string())?;
+        let exceptions = proj.list_staff_exceptions(&staff_member_id).map_err(|e| e.to_string())?;
+        let found = exceptions.iter().any(|e| e.start_date == start_date && e.end_date == end_date);
+        if !found {
+            return Err(format!(
+                "No exception found for provider from {} to {}",
+                start_date, end_date
+            ));
+        }
+    }
+
+    let payload = crate::events::staff_management::ProviderExceptionRemovedPayload {
+        staff_member_id: staff_member_id.clone(),
+        start_date,
+        end_date,
+    };
+    let stream_id = staff_stream(&staff_member_id);
+    {
+        let events = state.events.lock().map_err(|e| e.to_string())?;
+        let ver = events.current_version(&stream_id).map_err(|e| e.to_string())?;
+        events.append(&stream_id, ver, PROVIDER_EXCEPTION_REMOVED,
+            &serde_json::to_string(&payload).map_err(|e| e.to_string())?)
+            .map_err(|e| e.to_string())?;
+    }
+
+    do_rebuild(&state)?;
+    build_dto(&state, &staff_member_id)
+}
+
+/// List all active (non-archived) Provider-role staff members.
+#[tauri::command]
+#[specta::specta]
+pub fn list_providers(
+    state: State<'_, AppState>,
+) -> Result<Vec<StaffMemberDto>, String> {
+    do_rebuild(&state)?;
+    let proj = state.projections.lock().map_err(|e| e.to_string())?;
+    let rows = proj.list_staff_members().map_err(|e| e.to_string())?;
+    let mut dtos = Vec::new();
+    for row in &rows {
+        let roles = proj.list_staff_roles(&row.staff_member_id).map_err(|e| e.to_string())?;
+        if roles.contains(&"Provider".to_string()) {
+            dtos.push(build_dto_from_proj(&proj, &row.staff_member_id)?);
+        }
+    }
+    Ok(dtos)
 }

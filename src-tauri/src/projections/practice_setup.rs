@@ -1,7 +1,6 @@
 use crate::db::{
     EventStore, ProjectionStore,
-    PracticeSettingsRow, OfficeRow, ProviderRow, ProviderAvailabilityRow,
-    ProviderExceptionRow, ProcedureTypeRow,
+    PracticeSettingsRow, OfficeRow, ProcedureTypeRow,
 };
 use crate::events::practice_setup::*;
 
@@ -92,68 +91,6 @@ fn apply_event(proj: &ProjectionStore, event: &crate::db::StoredEvent) -> Result
             let p: OfficeArchivedPayload = parse(&event.payload, OFFICE_ARCHIVED)?;
             proj.archive_office(&p.id).map_err(|e| e.to_string())?;
         }
-        PROVIDER_REGISTERED => {
-            let p: ProviderRegisteredPayload = parse(&event.payload, PROVIDER_REGISTERED)?;
-            proj.upsert_provider(&ProviderRow {
-                id: p.id,
-                name: p.name,
-                provider_type: p.provider_type,
-                archived: false,
-            }).map_err(|e| e.to_string())?;
-        }
-        PROVIDER_RENAMED => {
-            let p: ProviderRenamedPayload = parse(&event.payload, PROVIDER_RENAMED)?;
-            proj.rename_provider(&p.id, &p.new_name).map_err(|e| e.to_string())?;
-        }
-        PROVIDER_TYPE_CHANGED => {
-            let p: ProviderTypeChangedPayload = parse(&event.payload, PROVIDER_TYPE_CHANGED)?;
-            proj.update_provider_type(&p.id, &p.new_provider_type).map_err(|e| e.to_string())?;
-        }
-        PROVIDER_ASSIGNED_TO_OFFICE => {
-            let p: ProviderAssignedToOfficePayload = parse(&event.payload, PROVIDER_ASSIGNED_TO_OFFICE)?;
-            proj.add_provider_office_assignment(&p.id, &p.office_id).map_err(|e| e.to_string())?;
-        }
-        PROVIDER_REMOVED_FROM_OFFICE => {
-            let p: ProviderRemovedFromOfficePayload = parse(&event.payload, PROVIDER_REMOVED_FROM_OFFICE)?;
-            proj.remove_provider_office_assignment(&p.id, &p.office_id).map_err(|e| e.to_string())?;
-        }
-        PROVIDER_AVAILABILITY_SET => {
-            let p: ProviderAvailabilitySetPayload = parse(&event.payload, PROVIDER_AVAILABILITY_SET)?;
-            proj.set_provider_availability(&ProviderAvailabilityRow {
-                provider_id: p.id,
-                office_id: p.office_id,
-                day_of_week: p.day_of_week,
-                start_time: p.start_time,
-                end_time: p.end_time,
-            }).map_err(|e| e.to_string())?;
-        }
-        PROVIDER_AVAILABILITY_CLEARED => {
-            let p: ProviderAvailabilityClearedPayload = parse(&event.payload, PROVIDER_AVAILABILITY_CLEARED)?;
-            proj.delete_provider_availability(&p.id, &p.office_id, &p.day_of_week)
-                .map_err(|e| e.to_string())?;
-        }
-        PROVIDER_EXCEPTION_SET => {
-            let p: ProviderExceptionSetPayload = parse(&event.payload, PROVIDER_EXCEPTION_SET)?;
-            proj.add_provider_exception(&ProviderExceptionRow {
-                provider_id: p.id,
-                start_date: p.start_date,
-                end_date: p.end_date,
-                reason: p.reason,
-            }).map_err(|e| e.to_string())?;
-        }
-        PROVIDER_EXCEPTION_REMOVED => {
-            let p: ProviderExceptionRemovedPayload = parse(&event.payload, PROVIDER_EXCEPTION_REMOVED)?;
-            proj.remove_provider_exception(&p.id, &p.start_date, &p.end_date)
-                .map_err(|e| e.to_string())?;
-        }
-        PROVIDER_ARCHIVED => {
-            let p: ProviderArchivedPayload = parse(&event.payload, PROVIDER_ARCHIVED)?;
-            proj.archive_provider(&p.id).map_err(|e| e.to_string())?;
-        }
-        PROVIDER_UNARCHIVED => {
-            let p: ProviderUnarchivedPayload = parse(&event.payload, PROVIDER_UNARCHIVED)?;
-            proj.unarchive_provider(&p.id).map_err(|e| e.to_string())?;
-        }
         PROCEDURE_TYPE_DEFINED => {
             let p: ProcedureTypeDefinedPayload = parse(&event.payload, PROCEDURE_TYPE_DEFINED)?;
             proj.upsert_procedure_type(&ProcedureTypeRow {
@@ -239,25 +176,6 @@ mod tests {
 
         let office = ps.get_office(office_id).unwrap().unwrap();
         assert_eq!(office.name, "Kingston Main");
-    }
-
-    #[test]
-    fn test_provider_registered_and_assigned() {
-        let (es, ps) = stores();
-        let pid = "prov-001";
-        let oid = "off-001";
-        append(&es, &format!("provider:{pid}"), PROVIDER_REGISTERED,
-            json!({"id": pid, "name": "Dr. Brown", "provider_type": "Dentist"}));
-        append(&es, &format!("provider:{pid}"), PROVIDER_ASSIGNED_TO_OFFICE,
-            json!({"id": pid, "office_id": oid}));
-        rebuild(&es, &ps).unwrap();
-
-        let provider = ps.get_provider(pid).unwrap().unwrap();
-        assert_eq!(provider.name, "Dr. Brown");
-        assert_eq!(provider.provider_type, "Dentist");
-
-        let offices = ps.list_provider_offices(pid).unwrap();
-        assert_eq!(offices, vec![oid.to_string()]);
     }
 
     #[test]

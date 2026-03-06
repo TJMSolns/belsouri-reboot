@@ -5,8 +5,6 @@ const VALID_DAYS: &[&str] = &[
     "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday",
 ];
 
-const VALID_PROVIDER_TYPES: &[&str] = &["Dentist", "Hygienist", "Specialist"];
-
 const VALID_CATEGORIES: &[&str] = &[
     "Consult", "Preventive", "Restorative", "Invasive", "Cosmetic", "Diagnostic",
 ];
@@ -68,17 +66,6 @@ pub fn validate_time_range(open: &str, close: &str) -> Result<(), String> {
     Ok(())
 }
 
-pub fn validate_provider_type(pt: &str) -> Result<(), String> {
-    if !VALID_PROVIDER_TYPES.contains(&pt) {
-        return Err(format!(
-            "Invalid provider type '{}'. Must be one of: {}",
-            pt,
-            VALID_PROVIDER_TYPES.join(", ")
-        ));
-    }
-    Ok(())
-}
-
 pub fn validate_duration(mins: u32) -> Result<(), String> {
     if mins < MIN_DURATION || mins > MAX_DURATION {
         return Err(format!(
@@ -100,7 +87,7 @@ pub fn validate_category(cat: &str) -> Result<(), String> {
     Ok(())
 }
 
-/// Validates YYYY-MM-DD format (basic structural check).
+/// Validates YYYY-MM-DD format (used by office-related date checks).
 pub fn validate_date_ymd(date: &str) -> Result<(), String> {
     let parts: Vec<&str> = date.split('-').collect();
     if parts.len() != 3 || parts[0].len() != 4 || parts[1].len() != 2 || parts[2].len() != 2 {
@@ -125,47 +112,6 @@ pub fn validate_date_range(start: &str, end: &str) -> Result<(), String> {
             "End date '{}' must be on or after start date '{}'",
             end, start
         ));
-    }
-    Ok(())
-}
-
-/// Represents a single availability window for overlap checking.
-#[derive(Debug, Clone)]
-pub struct AvailabilityWindow {
-    pub office_id: String,
-    pub day_of_week: String,
-    pub start_time: String,
-    pub end_time: String,
-}
-
-/// Checks that the proposed window does not overlap with existing windows
-/// at *different* offices on the same day.
-///
-/// Overlap: A overlaps B if A.start < B.end AND B.start < A.end
-pub fn check_no_cross_office_overlap(
-    existing: &[AvailabilityWindow],
-    proposed: &AvailabilityWindow,
-) -> Result<(), String> {
-    for w in existing {
-        // Only check different offices on the same day
-        if w.office_id == proposed.office_id || w.day_of_week != proposed.day_of_week {
-            continue;
-        }
-        // Check time overlap
-        if proposed.start_time < w.end_time && w.start_time < proposed.end_time {
-            return Err(format!(
-                "Proposed window ({} {}-{} at office {}) overlaps with existing window \
-                 ({}-{} at office {}) on {}",
-                proposed.day_of_week,
-                proposed.start_time,
-                proposed.end_time,
-                proposed.office_id,
-                w.start_time,
-                w.end_time,
-                w.office_id,
-                proposed.day_of_week
-            ));
-        }
     }
     Ok(())
 }
@@ -222,14 +168,6 @@ mod tests {
     }
 
     #[test]
-    fn test_validate_provider_type() {
-        assert!(validate_provider_type("Dentist").is_ok());
-        assert!(validate_provider_type("Hygienist").is_ok());
-        assert!(validate_provider_type("Specialist").is_ok());
-        assert!(validate_provider_type("Nurse").is_err());
-    }
-
-    #[test]
     fn test_validate_duration() {
         assert!(validate_duration(15).is_ok());
         assert!(validate_duration(240).is_ok());
@@ -259,71 +197,4 @@ mod tests {
         assert!(validate_date_range("2026-03-31", "2026-03-01").is_err());
     }
 
-    #[test]
-    fn test_cross_office_overlap_same_office_ignored() {
-        let existing = vec![AvailabilityWindow {
-            office_id: "off-a".to_string(),
-            day_of_week: "Monday".to_string(),
-            start_time: "08:00".to_string(),
-            end_time: "17:00".to_string(),
-        }];
-        let proposed = AvailabilityWindow {
-            office_id: "off-a".to_string(), // same office → no cross-office check
-            day_of_week: "Monday".to_string(),
-            start_time: "09:00".to_string(),
-            end_time: "12:00".to_string(),
-        };
-        assert!(check_no_cross_office_overlap(&existing, &proposed).is_ok());
-    }
-
-    #[test]
-    fn test_cross_office_overlap_different_day_ok() {
-        let existing = vec![AvailabilityWindow {
-            office_id: "off-a".to_string(),
-            day_of_week: "Monday".to_string(),
-            start_time: "08:00".to_string(),
-            end_time: "17:00".to_string(),
-        }];
-        let proposed = AvailabilityWindow {
-            office_id: "off-b".to_string(),
-            day_of_week: "Tuesday".to_string(), // different day
-            start_time: "09:00".to_string(),
-            end_time: "12:00".to_string(),
-        };
-        assert!(check_no_cross_office_overlap(&existing, &proposed).is_ok());
-    }
-
-    #[test]
-    fn test_cross_office_overlap_detected() {
-        let existing = vec![AvailabilityWindow {
-            office_id: "off-a".to_string(),
-            day_of_week: "Monday".to_string(),
-            start_time: "10:00".to_string(),
-            end_time: "14:00".to_string(),
-        }];
-        let proposed = AvailabilityWindow {
-            office_id: "off-b".to_string(),
-            day_of_week: "Monday".to_string(),
-            start_time: "12:00".to_string(),
-            end_time: "16:00".to_string(), // overlaps 12-14
-        };
-        assert!(check_no_cross_office_overlap(&existing, &proposed).is_err());
-    }
-
-    #[test]
-    fn test_cross_office_no_overlap_adjacent() {
-        let existing = vec![AvailabilityWindow {
-            office_id: "off-a".to_string(),
-            day_of_week: "Monday".to_string(),
-            start_time: "08:00".to_string(),
-            end_time: "12:00".to_string(),
-        }];
-        let proposed = AvailabilityWindow {
-            office_id: "off-b".to_string(),
-            day_of_week: "Monday".to_string(),
-            start_time: "12:00".to_string(), // starts exactly when other ends — adjacent, not overlapping
-            end_time: "17:00".to_string(),
-        };
-        assert!(check_no_cross_office_overlap(&existing, &proposed).is_ok());
-    }
 }

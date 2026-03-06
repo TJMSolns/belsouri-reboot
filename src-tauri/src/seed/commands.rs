@@ -7,13 +7,10 @@ use crate::events::patient_management::{
     PATIENT_REGISTERED, PATIENT_ARCHIVED,
     PatientRegisteredPayload, PatientArchivedPayload,
 };
-use crate::events::practice_setup::{
-    PROVIDER_REGISTERED, PROVIDER_ARCHIVED,
-    ProviderRegisteredPayload, ProviderArchivedPayload,
-};
 use crate::events::staff_management::{
-    STAFF_MEMBER_REGISTERED, STAFF_MEMBER_ARCHIVED, ROLE_ASSIGNED,
+    STAFF_MEMBER_REGISTERED, STAFF_MEMBER_ARCHIVED, ROLE_ASSIGNED, PROVIDER_TYPE_SET,
     StaffMemberRegisteredPayload, StaffMemberArchivedPayload, RoleAssignedPayload,
+    ProviderTypeSetPayload,
 };
 
 const SEED_ACTOR: &str = "system:seed";
@@ -42,7 +39,7 @@ const SEED_PATIENTS: &[&str] = &[
     "Nadine", "Tyrone", "Marcia", "Errol", "Kezia",
 ];
 
-/// 6 providers: Dr. <First> <ProviderType>  (2 per type)
+/// 6 clinical providers: (name, clinical_specialization)
 const SEED_PROVIDERS: &[(&str, &str)] = &[
     ("Dr. Winston", "Specialist"),
     ("Dr. Rochelle", "Specialist"),
@@ -91,16 +88,31 @@ pub async fn seed_demo_data(state: State<'_, AppState>) -> Result<SeedSummaryDto
             .map_err(|e| e.to_string())?;
     }
 
-    // ── Providers ───────────────────────────────────────────────────────────
-    for (first, provider_type) in SEED_PROVIDERS {
+    // ── Providers (registered as StaffMembers with Provider role + clinical specialization) ──
+    for (first, clinical_specialization) in SEED_PROVIDERS {
         let id = Uuid::new_v4().to_string();
-        let name = format!("{} {}", first, provider_type);
-        let json = serde_json::to_string(&ProviderRegisteredPayload {
-            id: id.clone(),
+        let name = format!("{} {}", first, clinical_specialization);
+        let stream = format!("staff:{id}");
+        let reg_json = serde_json::to_string(&StaffMemberRegisteredPayload {
+            staff_member_id: id.clone(),
             name,
-            provider_type: provider_type.to_string(),
+            phone: None,
+            email: None,
+            preferred_contact_channel: None,
         }).map_err(|e| e.to_string())?;
-        events.append(&format!("provider:{id}"), 0, PROVIDER_REGISTERED, &json)
+        events.append(&stream, 0, STAFF_MEMBER_REGISTERED, &reg_json)
+            .map_err(|e| e.to_string())?;
+        let role_json = serde_json::to_string(&RoleAssignedPayload {
+            staff_member_id: id.clone(),
+            role: "Provider".to_string(),
+        }).map_err(|e| e.to_string())?;
+        events.append(&stream, 1, ROLE_ASSIGNED, &role_json)
+            .map_err(|e| e.to_string())?;
+        let type_json = serde_json::to_string(&ProviderTypeSetPayload {
+            staff_member_id: id.clone(),
+            clinical_specialization: clinical_specialization.to_string(),
+        }).map_err(|e| e.to_string())?;
+        events.append(&stream, 2, PROVIDER_TYPE_SET, &type_json)
             .map_err(|e| e.to_string())?;
     }
 
@@ -158,22 +170,21 @@ pub async fn archive_demo_data(state: State<'_, AppState>) -> Result<ArchiveSumm
             }
         }
 
-        // Find non-archived providers whose name ends with a seed type
-        let providers = proj.list_providers().map_err(|e| e.to_string())?;
-        for p in providers {
-            if !p.archived {
-                let n = p.name.to_lowercase();
-                if n.ends_with(" specialist") || n.ends_with(" dentist") || n.ends_with(" hygienist") {
-                    provider_ids.push(p.id);
-                }
+        // Find non-archived Provider-role staff whose name ends with a seed specialization,
+        // and non-archived Staff whose name ends with " Staff"
+        let all_staff = proj.list_staff_members().map_err(|e| e.to_string())?;
+        for s in &all_staff {
+            if s.archived {
+                continue;
             }
-        }
-
-        // Find non-archived staff whose name ends with " Staff"
-        let staff = proj.list_staff_members().map_err(|e| e.to_string())?;
-        for s in staff {
-            if !s.archived && s.name.to_lowercase().ends_with(" staff") {
-                staff_ids.push(s.staff_member_id);
+            let roles = proj.list_staff_roles(&s.staff_member_id).map_err(|e| e.to_string())?;
+            let n = s.name.to_lowercase();
+            if roles.contains(&"Provider".to_string())
+                && (n.ends_with(" specialist") || n.ends_with(" dentist") || n.ends_with(" hygienist"))
+            {
+                provider_ids.push(s.staff_member_id.clone());
+            } else if n.ends_with(" staff") {
+                staff_ids.push(s.staff_member_id.clone());
             }
         }
     }
@@ -191,10 +202,11 @@ pub async fn archive_demo_data(state: State<'_, AppState>) -> Result<ArchiveSumm
     }
 
     for id in &provider_ids {
-        let json = serde_json::to_string(&ProviderArchivedPayload {
-            id: id.clone(),
+        let json = serde_json::to_string(&StaffMemberArchivedPayload {
+            staff_member_id: id.clone(),
         }).map_err(|e| e.to_string())?;
-        events.append(&format!("provider:{id}"), 1, PROVIDER_ARCHIVED, &json)
+        // Provider staff stream had 3 events (registered + role + type_set), use version 3
+        events.append(&format!("staff:{id}"), 3, STAFF_MEMBER_ARCHIVED, &json)
             .map_err(|e| e.to_string())?;
     }
 

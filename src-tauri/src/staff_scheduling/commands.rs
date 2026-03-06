@@ -4,7 +4,7 @@ use crate::app_state::AppState;
 use super::service::{self, OfficeProviderData};
 use super::types::{ProviderAvailabilityResult, ProviderScheduleEntry};
 
-/// Query whether a provider is available at an office on a given date and time.
+/// Query whether a provider (staff member with Provider role) is available at an office on a given date and time.
 ///
 /// date: "YYYY-MM-DD", time: "HH:MM"
 /// Returns {available, reason} where reason is null when available is true.
@@ -12,22 +12,22 @@ use super::types::{ProviderAvailabilityResult, ProviderScheduleEntry};
 #[tauri::command]
 pub fn query_provider_availability(
     state: State<'_, AppState>,
-    provider_id: String,
+    staff_member_id: String,
     office_id: String,
     date: String,
     time: String,
 ) -> Result<ProviderAvailabilityResult, String> {
     let proj = state.projections.lock().unwrap();
 
-    let provider = proj.get_provider(&provider_id)
+    let provider = proj.get_staff_member(&staff_member_id)
         .map_err(|e| e.to_string())?
-        .ok_or_else(|| format!("Provider not found: {provider_id}"))?;
+        .ok_or_else(|| format!("Staff member not found: {staff_member_id}"))?;
 
     let office = proj.get_office(&office_id)
         .map_err(|e| e.to_string())?
         .ok_or_else(|| format!("Office not found: {office_id}"))?;
 
-    let assignments = proj.list_provider_offices(&provider_id)
+    let assignments = proj.list_staff_offices(&staff_member_id)
         .map_err(|e| e.to_string())?;
     let assigned_to_office = assignments.contains(&office_id);
 
@@ -38,13 +38,13 @@ pub fn query_provider_availability(
         .map_err(|e| e.to_string())?;
     let office_has_hours_for_day = office_hours.iter().any(|h| h.day_of_week == day_of_week);
 
-    let exceptions = proj.list_provider_exceptions(&provider_id)
+    let exceptions = proj.list_staff_exceptions(&staff_member_id)
         .map_err(|e| e.to_string())?;
     let exception_pairs: Vec<(String, String)> = exceptions.iter()
         .map(|e| (e.start_date.clone(), e.end_date.clone()))
         .collect();
 
-    let availability = proj.list_provider_availability(&provider_id)
+    let availability = proj.list_staff_availability(&staff_member_id)
         .map_err(|e| e.to_string())?;
     let avail_for_day: Option<(String, String)> = availability.iter()
         .find(|a| a.office_id == office_id && a.day_of_week == day_of_week)
@@ -100,29 +100,34 @@ pub fn get_office_provider_schedule(
         return Ok(vec![]);
     }
 
-    let provider_ids = proj.list_providers_for_office(&office_id)
+    let staff_member_ids = proj.list_staff_for_office(&office_id)
         .map_err(|e| e.to_string())?;
 
     let mut providers_data: Vec<OfficeProviderData> = Vec::new();
-    for provider_id in &provider_ids {
-        let provider = match proj.get_provider(provider_id).map_err(|e| e.to_string())? {
+    for sm_id in &staff_member_ids {
+        let sm = match proj.get_staff_member(sm_id).map_err(|e| e.to_string())? {
             Some(p) => p,
             None => continue,
         };
-        let exceptions = proj.list_provider_exceptions(provider_id)
+        // Only include Provider-role staff
+        let roles = proj.list_staff_roles(sm_id).map_err(|e| e.to_string())?;
+        if !roles.contains(&"Provider".to_string()) {
+            continue;
+        }
+        let exceptions = proj.list_staff_exceptions(sm_id)
             .map_err(|e| e.to_string())?
             .into_iter()
             .map(|e| (e.start_date, e.end_date))
             .collect();
-        let availability = proj.list_provider_availability(provider_id)
+        let availability = proj.list_staff_availability(sm_id)
             .map_err(|e| e.to_string())?;
         let avail_for_day = availability.into_iter()
             .find(|a| a.office_id == office_id && a.day_of_week == day_of_week)
             .map(|a| (a.start_time, a.end_time));
         providers_data.push(OfficeProviderData {
-            provider_id: provider.id,
-            provider_name: provider.name,
-            provider_archived: provider.archived,
+            staff_member_id: sm.staff_member_id,
+            provider_name: sm.name,
+            provider_archived: sm.archived,
             exceptions,
             availability_for_day: avail_for_day,
         });

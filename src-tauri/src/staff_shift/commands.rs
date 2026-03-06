@@ -247,6 +247,7 @@ mod tests {
             email: None,
             preferred_contact_channel: None,
             pin_hash: None,
+            clinical_specialization: None,
             archived: false,
         }).unwrap();
         proj.add_staff_role("staff-1", "Staff").unwrap();
@@ -349,6 +350,7 @@ mod tests {
             email: None,
             preferred_contact_channel: None,
             pin_hash: None,
+            clinical_specialization: None,
             archived: true,
         }).unwrap();
         let row = proj.get_staff_member("staff-1").unwrap().unwrap();

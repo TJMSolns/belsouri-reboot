@@ -9,7 +9,7 @@ pub struct ProviderAvailabilityResult {
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
 pub struct ProviderScheduleEntry {
-    pub provider_id: String,
+    pub staff_member_id: String,
     pub provider_name: String,
     pub start_time: String,
     pub end_time: String,
