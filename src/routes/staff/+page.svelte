@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { commands, type StaffMemberDto, type ProviderDto, type AppointmentDto } from "$lib/bindings";
+  import { commands, type StaffMemberDto, type ProviderDto, type AppointmentDto, type StaffShiftDto } from "$lib/bindings";
   import { onMount } from "svelte";
   import { toast } from "$lib/stores/toast";
   import { confirm } from "$lib/stores/confirm";
@@ -54,6 +54,16 @@
   let providerScheduleLoading = $state(false);
   let officeMap = $state<Record<string, string>>({});
 
+  // STAFF-1: Sort / filter
+  let searchQuery = $state("");
+  let roleFilter = $state<"all" | "PracticeManager" | "Provider" | "Staff">("all");
+  let sortAsc = $state(true);
+
+  // STAFF-4: Shift grid in expanded card
+  let memberShifts = $state<StaffShiftDto[]>([]);
+  let memberShiftsLoading = $state(false);
+  let memberShiftsWeekStart = $state(getMondayOfWeek(todayStr()));
+
   const ROLES = ["PracticeManager", "Provider", "Staff"];
   const CHANNELS = ["", "WhatsApp", "SMS", "Phone", "Email"];
 
@@ -105,6 +115,23 @@
     const period = h < 12 ? "AM" : "PM";
     const h12 = h % 12 === 0 ? 12 : h % 12;
     return `${h12}:${m.toString().padStart(2, "0")} ${period}`;
+  }
+
+  function parseHHMM(t: string): number {
+    const [h, m] = t.split(":").map(Number);
+    return h * 60 + m;
+  }
+
+  function minsTo12h(m: number): string {
+    const h = Math.floor(m / 60);
+    const min = m % 60;
+    const period = h >= 12 ? "PM" : "AM";
+    const h12 = h % 12 || 12;
+    return `${h12}:${min.toString().padStart(2, "0")} ${period}`;
+  }
+
+  function dayAbbr(date: string): string {
+    return new Date(date + "T12:00:00").toLocaleDateString("en-JM", { weekday: "short" });
   }
 
   function formatRoleName(role: string): string {
@@ -162,8 +189,35 @@
   function archivedStaff() { return staff.filter((s) => s.archived); }
   let hasActivePM = $derived(staff.some((s) => !s.archived && s.roles.includes("PracticeManager")));
 
+  // STAFF-1: filtered + sorted active staff
+  let filteredActiveStaff = $derived(
+    staff
+      .filter((s) => !s.archived)
+      .filter((s) => !searchQuery.trim() || s.name.toLowerCase().includes(searchQuery.trim().toLowerCase()))
+      .filter((s) => roleFilter === "all" || s.roles.includes(roleFilter))
+      .sort((a, b) => { const c = a.name.localeCompare(b.name); return sortAsc ? c : -c; }),
+  );
+
+  // STAFF-4: shift loading
+  async function loadMemberShifts(id: string) {
+    const memberName = staff.find((s) => s.staff_member_id === id)?.name ?? "this staff member";
+    memberShiftsLoading = true;
+    const res = await commands.getShiftRoster(memberShiftsWeekStart, null);
+    memberShiftsLoading = false;
+    if (res.status === "ok") {
+      memberShifts = res.data.filter((s) => s.staff_member_id === id && !s.cancelled);
+    } else {
+      toast.error(`Could not load shift schedule for ${memberName}. Check your connection and try again.`);
+    }
+  }
+
+  async function navigateMemberShiftsWeek(delta: number, id: string) {
+    memberShiftsWeekStart = addDays(memberShiftsWeekStart, delta * 7);
+    await loadMemberShifts(id);
+  }
+
   async function claim() {
-    if (!claimName.trim()) { claimError = "Name is required"; return; }
+    if (!claimName.trim()) { claimError = "Practice Manager name is required to claim this role."; return; }
     claiming = true; claimError = null;
     const r = await commands.claimPracticeManagerRole(claimName.trim());
     claiming = false;
@@ -175,7 +229,7 @@
   }
 
   async function registerStaff() {
-    if (!regName.trim()) { regError = "Name is required"; return; }
+    if (!regName.trim()) { regError = "Staff member name is required."; return; }
     registering = true; regError = null;
     const r = await commands.registerStaffMember(
       regName.trim(),
@@ -193,17 +247,20 @@
     } else { regError = r.error; }
   }
 
-  function toggleExpand(id: string) {
+  async function toggleExpand(id: string) {
     if (expandedId === id) {
       expandedId = null;
       pinSection = null;
       verifyResult = null;
+      memberShifts = [];
     } else {
       expandedId = id;
       pinSection = null;
       pinError = null;
       roleError = null;
       verifyResult = null;
+      memberShiftsWeekStart = getMondayOfWeek(todayStr());
+      await loadMemberShifts(id);
     }
   }
 
@@ -296,10 +353,14 @@
   }
 
   async function doUnarchive(id: string) {
+    const memberName = staff.find((s) => s.staff_member_id === id)?.name ?? "Staff member";
     const r = await commands.unarchiveStaffMember(id);
     if (r.status === "ok") {
       staff = staff.map((s) => s.staff_member_id === id ? r.data : s);
-    } else { expandError = r.error; }
+      toast.success(`${memberName} restored to active staff.`);
+    } else {
+      toast.error(r.error);
+    }
   }
 
   function roleLabel(roles: string[]): string {
@@ -393,19 +454,59 @@
     </div>
   {/if}
 
+  <!-- STAFF-1: Sort / filter bar -->
+  {#if activeStaff().length > 0}
+    <div class="filter-bar">
+      <label for="staff-search" class="sr-only">Search staff by name</label>
+      <input
+        id="staff-search"
+        type="search"
+        bind:value={searchQuery}
+        placeholder="Search by name…"
+        class="search-input"
+      />
+      <div class="filter-chips" role="group" aria-label="Filter by role">
+        {#each [
+          { value: "all", label: "All" },
+          { value: "PracticeManager", label: "Practice Manager" },
+          { value: "Provider", label: "Provider" },
+          { value: "Staff", label: "Staff" },
+        ] as chip}
+          <button
+            class="chip-btn"
+            class:active={roleFilter === chip.value}
+            onclick={() => (roleFilter = chip.value as typeof roleFilter)}
+            aria-pressed={roleFilter === chip.value}
+          >{chip.label}</button>
+        {/each}
+      </div>
+      <button
+        class="sort-btn"
+        onclick={() => (sortAsc = !sortAsc)}
+        aria-label={sortAsc ? "Currently A to Z — click to sort Z to A" : "Currently Z to A — click to sort A to Z"}
+      >{sortAsc ? "A→Z" : "Z→A"}</button>
+      <span class="filter-count">{filteredActiveStaff.length} member{filteredActiveStaff.length === 1 ? "" : "s"}</span>
+    </div>
+  {/if}
+
   <!-- Active staff list -->
-  {#if activeStaff().length === 0 && !showClaim && !showRegister}
+  {#if filteredActiveStaff.length === 0 && !showClaim && !showRegister}
     <p class="empty">
-      {#if !hasActivePM}
-        No staff yet. Click <strong>Claim Practice Manager Role</strong> to get started.
+      {#if activeStaff().length === 0}
+        {#if !hasActivePM}
+          No staff yet. Click <strong>Claim Practice Manager Role</strong> to get started.
+        {:else}
+          No staff registered yet. Click <strong>+ Register Staff</strong> to add a staff member.
+        {/if}
       {:else}
-        No staff registered yet. Click <strong>+ Register Staff</strong> to add a staff member.
+        No staff match your filter.
+        <button class="btn-link" onclick={() => { searchQuery = ""; roleFilter = "all"; }}>Clear filter</button>
       {/if}
     </p>
   {/if}
 
   <div class="staff-list">
-    {#each activeStaff() as sm (sm.staff_member_id)}
+    {#each filteredActiveStaff as sm (sm.staff_member_id)}
       <div class="staff-card">
         <div
           class="staff-row"
@@ -414,7 +515,7 @@
           aria-expanded={expandedId === sm.staff_member_id}
           aria-label="Expand {sm.name} details"
           onclick={() => toggleExpand(sm.staff_member_id)}
-          onkeydown={(e) => e.key === "Enter" && toggleExpand(sm.staff_member_id)}
+          onkeydown={(e) => (e.key === "Enter" || e.key === " ") && toggleExpand(sm.staff_member_id)}
         >
           <div class="staff-info">
             <span class="staff-name">{sm.name}</span>
@@ -530,6 +631,48 @@
               {/if}
             </section>
 
+            <!-- STAFF-4: Shifts this week -->
+            <section class="detail-section">
+              <div class="section-row">
+                <h4>Shifts this week</h4>
+                <div class="week-nav-compact">
+                  <button class="nav-btn-sm" onclick={() => navigateMemberShiftsWeek(-1, sm.staff_member_id)} title="Previous week" aria-label="Previous week">‹</button>
+                  <span class="week-label-sm">{formatWeekRange(memberShiftsWeekStart)}</span>
+                  <button class="nav-btn-sm" onclick={() => navigateMemberShiftsWeek(1, sm.staff_member_id)} title="Next week" aria-label="Next week">›</button>
+                </div>
+              </div>
+              {#if memberShiftsLoading}
+                <div class="load-row">
+                  <span class="spinner spinner-sm" aria-hidden="true"></span>
+                  <span>Loading shifts…</span>
+                </div>
+              {:else}
+                <div class="shift-week-grid" role="table" aria-label="Shift schedule for {sm.name}">
+                  {#each getWeekDays(memberShiftsWeekStart) as day}
+                    {@const shift = memberShifts.find((s) => s.date === day)}
+                    <div class="shift-day-cell" class:shift-active={!!shift} role="cell">
+                      <div class="shift-day-label">{dayAbbr(day)}</div>
+                      <div class="shift-day-num">{new Date(day + "T12:00:00").getDate()}</div>
+                      {#if shift}
+                        <div class="shift-time">{minsTo12h(parseHHMM(shift.start_time))}–{minsTo12h(parseHHMM(shift.end_time))}</div>
+                        <div class="shift-office-abbr" title={shift.office_name}>{shift.office_name.split(" ")[0]}</div>
+                      {:else}
+                        <div class="shift-none" aria-label="No shift">—</div>
+                      {/if}
+                    </div>
+                  {/each}
+                </div>
+              {/if}
+            </section>
+
+            <!-- STAFF-3: Plan shift link -->
+            <section class="detail-section plan-shift-section">
+              <a href="/schedule?view=roster&planFor={sm.staff_member_id}" class="btn-sm btn-ghost plan-shift-link">
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                Plan shift in Roster
+              </a>
+            </section>
+
             <!-- Archive -->
             <section class="detail-section archive-section">
               <button class="btn-danger-sm" onclick={() => doArchive(sm.staff_member_id)}>Archive Staff Member</button>
@@ -555,7 +698,7 @@
               aria-expanded={expandedProviderId === prov.id}
               aria-label="Expand {prov.name} schedule"
               onclick={() => toggleProvider(prov.id)}
-              onkeydown={(e) => e.key === "Enter" && toggleProvider(prov.id)}
+              onkeydown={(e) => (e.key === "Enter" || e.key === " ") && toggleProvider(prov.id)}
             >
               <div class="provider-info">
                 <span class="provider-name">{prov.name}</span>
@@ -645,7 +788,7 @@
                 <span class="badge archived-badge">Archived</span>
                 <span class="meta">{roleLabel(sm.roles)}</span>
               </div>
-              <button class="btn-sm btn-ghost" onclick={() => doUnarchive(sm.staff_member_id)}>Unarchive</button>
+              <button class="btn-sm btn-ghost" onclick={() => doUnarchive(sm.staff_member_id)}>Restore</button>
             </div>
           </div>
         {/each}
@@ -799,7 +942,7 @@
   .week-nav { display: flex; align-items: center; gap: var(--space-2); margin-bottom: var(--space-4); flex-wrap: wrap; }
   .nav-btn-sm {
     background: var(--pearl-mist); border: 1.5px solid var(--pearl-mist-dk); border-radius: var(--radius-sm);
-    color: var(--slate-fog); font-size: var(--text-sm); width: 28px; height: 28px;
+    color: var(--slate-fog); font-size: var(--text-sm); min-width: 40px; min-height: 40px;
     cursor: pointer; display: flex; align-items: center; justify-content: center; padding: 0;
     transition: all var(--transition-fast);
   }
@@ -865,4 +1008,68 @@
     transition: background var(--transition-fast);
   }
   .btn-danger-sm:hover { background: var(--healthy-coral-lt); }
+
+  /* ── STAFF-1: Filter bar ─────────────────────────────── */
+  .filter-bar {
+    display: flex; align-items: center; gap: var(--space-3); flex-wrap: wrap;
+    margin-bottom: var(--space-4);
+    padding: var(--space-3) var(--space-4);
+    background: var(--pearl-mist); border: 1px solid var(--pearl-mist-dk); border-radius: var(--radius-md);
+  }
+  .search-input {
+    min-width: 180px; height: 36px; padding: 0 var(--space-3);
+    border: 1.5px solid var(--pearl-mist-dk); border-radius: var(--radius-md);
+    font-size: var(--text-sm); font-family: var(--font-body); background: #fff;
+  }
+  .search-input:focus { outline: none; border-color: var(--caribbean-teal); box-shadow: 0 0 0 3px rgba(0,139,153,0.15); }
+  .filter-chips { display: flex; gap: var(--space-1); }
+  .chip-btn {
+    min-height: 40px; padding: 0 var(--space-3);
+    border: 1.5px solid var(--pearl-mist-dk); border-radius: var(--radius-pill);
+    background: #fff; font-size: var(--text-xs); font-family: var(--font-heading);
+    font-weight: 600; color: var(--slate-fog); cursor: pointer;
+    transition: all var(--transition-fast);
+  }
+  .chip-btn:hover { border-color: var(--caribbean-teal); color: var(--caribbean-teal); }
+  .chip-btn.active { background: var(--caribbean-teal); border-color: var(--caribbean-teal); color: #fff; }
+  .sort-btn {
+    min-height: 40px; padding: 0 var(--space-3);
+    border: 1.5px solid var(--pearl-mist-dk); border-radius: var(--radius-md);
+    background: #fff; font-size: var(--text-xs); font-family: var(--font-heading);
+    font-weight: 600; color: var(--slate-fog); cursor: pointer;
+    transition: all var(--transition-fast);
+  }
+  .sort-btn:hover { border-color: var(--caribbean-teal); color: var(--caribbean-teal); }
+  .filter-count { margin-left: auto; font-size: var(--text-xs); color: var(--slate-fog); font-family: var(--font-body); white-space: nowrap; }
+  .btn-link {
+    background: none; border: none; color: var(--caribbean-teal);
+    font-size: inherit; font-family: var(--font-body); cursor: pointer; text-decoration: underline; padding: 0;
+  }
+  .btn-link:hover { color: var(--caribbean-teal-dk); }
+
+  /* ── STAFF-4: Shift week grid ────────────────────────── */
+  .section-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: var(--space-3); }
+  .week-nav-compact { display: flex; align-items: center; gap: var(--space-1); }
+  .week-label-sm { font-size: var(--text-xs); color: var(--slate-fog); font-family: var(--font-body); white-space: nowrap; }
+  .shift-week-grid {
+    display: grid; grid-template-columns: repeat(7, 1fr); gap: var(--space-1); margin-bottom: var(--space-2);
+  }
+  .shift-day-cell {
+    display: flex; flex-direction: column; align-items: center; gap: 2px;
+    padding: var(--space-2) var(--space-1);
+    border-radius: var(--radius-sm); background: var(--pearl-mist); border: 1px solid var(--pearl-mist-dk);
+    text-align: center;
+  }
+  .shift-day-cell.shift-active { background: var(--caribbean-teal-lt, #e6f7f8); border-color: var(--caribbean-teal); }
+  .shift-day-label { font-size: 0.65rem; font-weight: 700; color: var(--slate-fog); font-family: var(--font-heading); text-transform: uppercase; letter-spacing: 0.04em; }
+  .shift-day-num { font-size: var(--text-xs); font-weight: 600; color: var(--abyss-navy); font-family: var(--font-heading); }
+  .shift-time { font-size: var(--text-xs); font-family: var(--font-mono); color: var(--caribbean-teal); font-weight: 600; line-height: 1.2; }
+  .shift-office-abbr { font-size: 0.6rem; color: var(--slate-fog); font-family: var(--font-body); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+  .shift-none { font-size: var(--text-xs); color: var(--pearl-mist-dk); font-family: var(--font-body); }
+  .load-row { display: flex; align-items: center; gap: var(--space-2); font-size: var(--text-xs); color: var(--slate-fog); font-family: var(--font-body); }
+
+  /* ── STAFF-3: Plan shift link ────────────────────────── */
+  .plan-shift-section { border-top: 1px solid var(--pearl-mist-dk); padding-top: var(--space-3); }
+  .plan-shift-link { text-decoration: none; display: inline-flex; align-items: center; gap: var(--space-2); }
+  .plan-shift-link:hover { background: var(--pearl-mist); border-color: var(--caribbean-teal); color: var(--caribbean-teal); }
 </style>

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { page } from "$app/stores";
   import { commands } from "$lib/bindings";
   import type {
     AppointmentDto, AppointmentWithNotesDto, CallListEntryDto,
@@ -674,6 +675,19 @@
 
   $effect(() => {
     if (scheduleView === "roster" && selectedDate) loadRoster();
+  });
+
+  // STAFF-3: detect ?planFor=<staffMemberId> from Staff page "Plan shift" link
+  $effect(() => {
+    const planFor = $page.url.searchParams.get("planFor");
+    if (planFor && allStaff.length > 0) {
+      const found = allStaff.find((s) => s.staff_member_id === planFor);
+      if (found) {
+        scheduleView = "roster";
+        planShiftStaffId = planFor;
+        showPlanShift = true;
+      }
+    }
   });
 
   // Pre-fill planShiftRole when staff changes — only reset if current role is not valid
