@@ -14,6 +14,14 @@
     Cosmetic:    "var(--color-cat-cosmetic)",
     Diagnostic:  "var(--color-cat-diagnostic)",
   };
+  const CATEGORY_COLORS_LT: Record<string, string> = {
+    Consult:     "var(--color-cat-consult-lt)",
+    Preventive:  "var(--color-cat-preventive-lt)",
+    Restorative: "var(--color-cat-restorative-lt)",
+    Invasive:    "var(--color-cat-invasive-lt)",
+    Cosmetic:    "var(--color-cat-cosmetic-lt)",
+    Diagnostic:  "var(--color-cat-diagnostic-lt)",
+  };
 
   const PROVIDER_TYPE_OPTIONS = [
     { value: "", label: "Any provider" },
@@ -68,7 +76,7 @@
   }
 
   async function define() {
-    if (!newName.trim()) { defineError = "Name is required."; return; }
+    if (!newName.trim()) { defineError = "Procedure type name is required."; return; }
     defining = true; defineError = null;
     const r = await commands.defineProcedureType(newName.trim(), newCategory, newDuration);
     defining = false;
@@ -137,7 +145,7 @@
       <button class="btn-secondary" onclick={seed} disabled={seeding}>
         {#if seeding}<span class="spinner" aria-hidden="true"></span><span class="sr-only">Adding defaults</span>{:else}Add Defaults{/if}
       </button>
-      <button class="btn-primary" onclick={() => (showDefine = !showDefine)}>
+      <button class="btn-primary" onclick={() => { showDefine = !showDefine; if (!showDefine) { newName = ""; newDuration = 30; newCategory = "Preventive"; defineError = null; } }}>
         {showDefine ? "Cancel" : "+ Define"}
       </button>
     </div>
@@ -159,7 +167,7 @@
       {#if defineError}<p class="error">{defineError}</p>{/if}
       <div class="row">
         <div class="field">
-          <label for="proc-name">Name</label>
+          <label for="proc-name">Name <span class="required-star" aria-hidden="true">*</span></label>
           <input id="proc-name" bind:value={newName} placeholder="e.g. Root Canal" />
         </div>
         <div class="field" style="max-width:150px">
@@ -224,7 +232,7 @@
             <div class="type-info">
               <span class="cat-dot" style="background:{CATEGORY_COLORS[pt.category] ?? 'var(--pearl-mist-dk)'}"></span>
               <span class="type-name">{pt.name}</span>
-              <span class="badge cat-badge" style="background:{CATEGORY_COLORS[pt.category]}22; color:{CATEGORY_COLORS[pt.category]}">{pt.category}</span>
+              <span class="badge cat-badge" style="background:{CATEGORY_COLORS_LT[pt.category] ?? 'var(--pearl-mist)'}; color:{CATEGORY_COLORS[pt.category] ?? 'var(--slate-fog)'}">{pt.category}</span>
               <span class="meta">{pt.default_duration_minutes} min</span>
               {#if pt.required_provider_type}
                 <span class="badge req-badge" title="Required provider type">

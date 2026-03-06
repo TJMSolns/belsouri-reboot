@@ -45,12 +45,18 @@
   --color-role-staff-lt: #F4F6F7;
 
   /* ── Procedure category colours ──────────────────────────────── */
-  --color-cat-consult:     #f0c040;
-  --color-cat-preventive:  #4a90d9;
-  --color-cat-restorative: #27ae60;   /* same as --island-palm */
-  --color-cat-invasive:    #e74c3c;
-  --color-cat-cosmetic:    #9b59b6;
-  --color-cat-diagnostic:  #95a5a6;
+  --color-cat-consult:        #f0c040;
+  --color-cat-consult-lt:     #fdf7e6;
+  --color-cat-preventive:     #4a90d9;
+  --color-cat-preventive-lt:  #e7f0fa;
+  --color-cat-restorative:    #27ae60;   /* same as --island-palm */
+  --color-cat-restorative-lt: #e2f4ea;
+  --color-cat-invasive:       #e74c3c;
+  --color-cat-invasive-lt:    #fce8e7;
+  --color-cat-cosmetic:       #9b59b6;
+  --color-cat-cosmetic-lt:    #f0e4f7;
+  --color-cat-diagnostic:     #95a5a6;
+  --color-cat-diagnostic-lt:  #f0f1f2;
 
   /* ── Archived / inactive state ────────────────────────────────── */
   --color-archived:    #a06030;

@@ -65,7 +65,7 @@
   }
 
   async function createOffice() {
-    if (!newName.trim()) { createError = "Name is required."; return; }
+    if (!newName.trim()) { createError = "Office name is required."; return; }
     if (newChairs < 1) { createError = "Chair count must be at least 1."; return; }
     creating = true;
     createError = null;
@@ -73,6 +73,7 @@
     creating = false;
     if (r.status === "ok") {
       offices = [...offices, r.data].sort((a, b) => a.name.localeCompare(b.name));
+      toast.success(`Office "${r.data.name}" created.`);
       newName = "";
       newChairs = 1;
       showCreate = false;
@@ -97,7 +98,7 @@
     const r = await commands.updateOfficeChairCount(office.id, count);
     if (r.status === "ok") {
       offices = offices.map((o) => (o.id === office.id ? r.data : o));
-      toast.success("Chair count updated.");
+      toast.success(`Chair count for ${r.data.name} updated to ${r.data.chair_count}.`);
     } else {
       error = r.error;
     }
@@ -165,6 +166,7 @@
     addrSaving = { ...addrSaving, [officeId]: false };
     if (r.status === "ok") {
       offices = offices.map((o) => (o.id === officeId ? r.data : o));
+      toast.success(`Address saved for ${r.data.name}.`);
     } else {
       addrError = { ...addrError, [officeId]: r.error };
     }
@@ -176,7 +178,8 @@
   }
 
   async function archiveOffice(id: string) {
-    const ok = await confirm({ title: "Archive office", message: "This office will be hidden from active lists. You can restore it later.", confirmLabel: "Archive", destructive: true });
+    const officeName = offices.find((o) => o.id === id)?.name ?? "this office";
+    const ok = await confirm({ title: `Archive ${officeName}`, message: `${officeName} will be hidden from active scheduling lists. You can restore it later.`, confirmLabel: "Archive", destructive: true });
     if (!ok) return;
     const r = await commands.archiveOffice(id);
     if (r.status === "ok") {
@@ -204,7 +207,7 @@
 <div>
   <div class="section-header">
     <h2>Offices</h2>
-    <button class="btn-primary" onclick={() => (showCreate = !showCreate)}>
+    <button class="btn-primary" onclick={() => { showCreate = !showCreate; if (!showCreate) { newName = ""; newChairs = 1; createError = null; } }}>
       {showCreate ? "Cancel" : "+ New Office"}
     </button>
   </div>
@@ -218,11 +221,11 @@
       {#if createError}<p class="error">{createError}</p>{/if}
       <div class="row">
         <div class="field">
-          <label for="new-office-name">Name</label>
+          <label for="new-office-name">Name <span class="required-star" aria-hidden="true">*</span></label>
           <input id="new-office-name" bind:value={newName} placeholder="e.g. Kingston" />
         </div>
         <div class="field" style="max-width:120px">
-          <label for="new-office-chairs">Chairs</label>
+          <label for="new-office-chairs">Chairs <span class="required-star" aria-hidden="true">*</span></label>
           <input id="new-office-chairs" type="number" min="1" bind:value={newChairs} />
         </div>
         <div class="field" style="justify-content:flex-end; padding-top:1.4rem">
@@ -302,7 +305,7 @@
                 <label for="office-addr1-{office.id}">Address Line 1</label>
                 <input id="office-addr1-{office.id}"
                   value={addrInputs[office.id]?.addr1 ?? ""}
-                  placeholder="Street address"
+                  placeholder="e.g. 12 Harbour Street"
                   oninput={(e) => setAddrInput(office.id, "addr1", (e.target as HTMLInputElement).value)}
                   onblur={() => saveAddress(office.id)}
                 />
@@ -475,7 +478,7 @@
   .hours-err { font-size: var(--text-xs); color: var(--healthy-coral-dk); padding-left: 2px; }
 
   .btn-primary {
-    display: inline-flex; align-items: center; min-height: 36px; padding: 0 var(--space-4);
+    display: inline-flex; align-items: center; min-height: 44px; padding: 0 var(--space-4);
     background: var(--caribbean-teal); color: white; border: none;
     border-radius: var(--radius-md); font-family: var(--font-heading); font-size: var(--text-sm);
     font-weight: 600; cursor: pointer; transition: background var(--transition-fast);
@@ -484,7 +487,7 @@
   .btn-primary:disabled { opacity: 0.45; cursor: not-allowed; }
 
   .btn-danger-sm {
-    display: inline-flex; align-items: center; min-height: 32px; padding: 0 var(--space-3);
+    display: inline-flex; align-items: center; min-height: 44px; padding: 0 var(--space-3);
     background: white; color: var(--healthy-coral-dk);
     border: 1px solid var(--healthy-coral); border-radius: var(--radius-md);
     font-size: var(--text-xs); font-family: var(--font-body); font-weight: 600; cursor: pointer;

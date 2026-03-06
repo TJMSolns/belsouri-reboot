@@ -76,3 +76,48 @@ Living document. Updated continuously as we work.
 - When spawning parallel agents, pre-assign file ownership to prevent merge conflicts on shared files.
 
 **Governance**: No new ADR — these are process refinements, not architectural decisions.
+
+---
+
+### 2026-03-06: Watchdog Skills Validated With Concrete Evidence
+
+**Date**: 2026-03-06
+**Context**: STAFF-1/3/4 implementation session (staff hub improvements). Features were feature-complete, then ux-review, copy-check, and icon-audit ran on the changed file.
+
+**What happened**: Watchdog skills flagged 11 violations across UX, copy, and icon specifications — touch target buttons at 32px (below 44px minimum), generic error messages, a calendar icon at 14px (not a valid size token), missing Space key on `role="button"` elements, and missing error feedback on async operations. All 11 were fixed before pushing.
+
+**What we learned**: The watchdog skills catch real, user-facing defects that would have shipped without them. They enforce POL-001/002/003 compliance mechanically. The workflow is: run skills → review output → fix issues → `pnpm check` → push. Skipping the skills is not a time-saver; it defers real bugs.
+
+**What we'll do differently**: Watchdog skills (ux-review, copy-check, icon-audit) run on every touched Svelte file before claiming done. All three must pass — same weight as `pnpm check`, same hard stop as failing tests.
+
+**Governance**: Reinforces CLAUDE.md §Mandatory Post-Build Review. Already present — treat it as a hard stop, not optional polish.
+
+---
+
+### 2026-03-06: Error Toasts Must Name the Affected Entity
+
+**Date**: 2026-03-06
+**Context**: STAFF-4 shift grid implementation. Copy-check flagged the error toast in `loadMemberShifts()`.
+
+**What happened**: The initial error read "Could not load shift schedule. Check your connection and try again." A user expands Maria's card to see her shifts and gets a generic error with no indication of whose shifts failed to load. Copy-check caught this as a POL-003 violation.
+
+**What we learned**: Even in functions that operate on a single entity (function receives an ID), error messages must surface the human-readable name. This requires a one-line lookup (name from staff array by ID) inside the error handler. The extra line is always worth the clarity — a toast appears globally and loses context without the name.
+
+**What we'll do differently**: When writing async functions that operate on a specific entity, look up and include the entity's name in all error toasts — not just the success path. Pattern: `const name = collection.find(x => x.id === id)?.name ?? "this item"` at the top of the function.
+
+**Governance**: No governance change needed. Reinforces POL-003 §Error Message Standard (name the object, describe the problem, give a resolution path).
+
+---
+
+### 2026-03-06: DEVELOPMENT-PLAN.md Does Not Self-Update — Sync Is Manual
+
+**Date**: 2026-03-06
+**Context**: STAFF-1/3/4 session. Pre-implementation review of the plan listed SCH-1/2/3 as pending work.
+
+**What happened**: Reading the code revealed SCH-1 (Reschedule UI), SCH-2 (hide unscheduled providers), and SCH-3 (two-aggregate UX hints) were already implemented in previous sessions. DEVELOPMENT-PLAN.md still listed them as pending because no step in the post-ship process updated the document. The gap was weeks old.
+
+**What we learned**: DEVELOPMENT-PLAN.md drifts from reality without an explicit sync mechanism. Features ship, but the plan is not updated. This compounds across sessions — new work sessions start from stale information and may re-plan already-complete features.
+
+**What we'll do differently**: After every feature push, scan DEVELOPMENT-PLAN.md for the shipped items and mark them complete with the commit reference. Add "sync DEVELOPMENT-PLAN.md" to the post-sprint checklist at the same level as updating LESSONS-LEARNED.md.
+
+**Governance**: Process item — no ADR needed. Candidate for a lightweight `scripts/plan-sync-check.mjs` that cross-references git log against plan items and warns if the document is stale.
