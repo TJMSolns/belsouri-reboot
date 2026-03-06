@@ -1,7 +1,7 @@
 # Project Status: Belsouri Dental Practice Management
 
 **Last Updated**: 2026-03-06
-**Current Phase**: Post-MVP Polish Sprint — watchdog audit pass complete, domain model correction next
+**Current Phase**: Post-MVP Polish Sprint — DM-1 complete, next: REL-1.5 field audit
 
 ---
 
@@ -24,7 +24,7 @@ All 6 MVP bounded contexts are shipped and merged to main.
 
 | Metric | Value |
 |--------|-------|
-| Cargo tests passing | 171 |
+| Cargo tests passing | 172 |
 | TypeScript errors | 0 |
 | TypeScript warnings | 0 |
 | Clippy warnings | 0 |
@@ -55,21 +55,19 @@ All 6 MVP bounded contexts are shipped and merged to main.
 | UX-2.7/2.8 | DD/MM/YYYY date format + aria labels on schedule page |
 | DS-3.5 | Watchdog fix pass: schedule page (7 UX/copy/icon fixes) |
 | Watchdog audit | Full ux-review + copy-check + icon-audit pass on all setup components |
+| DM-1 | Provider IS A StaffMember — merged Provider aggregate into StaffMember; retired separate Practice Setup Provider; 172 tests, 0 TS errors |
 
 ---
 
 ## Current Work
 
-**Domain Model Correction — Staff/Provider hierarchy**
+**Post-MVP Polish — backlog order (DEVELOPMENT-PLAN.md)**
 
-Tony confirmed: Provider IS A StaffMember. The current model has Provider as a separate aggregate, which is architecturally wrong — scheduling invariants require cross-aggregate checks that violate DDD consistency boundaries.
-
-Ceremony scope required before implementation:
-1. Update ubiquitous language
-2. Rewrite StaffMember aggregate doc (absorb clinical fields, availability, exceptions)
-3. Retire Provider aggregate doc
-4. Update context map
-5. Phase 2: Three Amigos + Example Mapping + BDD for the migration
+DM-1 complete. Next items:
+1. REL-1.5 — Field audit: form validation + error specificity sweep
+2. UX-2.2 — Loading spinners on all async actions
+3. REL-2.4 — Error message specificity (POL-003 compliance)
+4. REL-2.1 — Print call list
 
 ---
 
@@ -77,7 +75,7 @@ Ceremony scope required before implementation:
 
 | Item | Description | Ceremony |
 |------|-------------|----------|
-| DM-1 | Staff/Provider domain model correction — merge Provider into StaffMember | Partial Phase 1 + Phase 2 |
+| DM-1 | Staff/Provider domain model correction — merge Provider into StaffMember | DONE |
 | REL-1.5 | Field audit — form validation + error specificity sweep | None |
 | UX-2.2 | Loading spinners on all async actions | None |
 | REL-2.4 | Error message specificity (POL-003 compliance) | None |
