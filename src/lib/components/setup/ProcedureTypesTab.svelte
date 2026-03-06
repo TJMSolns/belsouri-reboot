@@ -143,7 +143,8 @@
     <h2>Procedure Types</h2>
     <div class="header-actions">
       <button class="btn-secondary" onclick={seed} disabled={seeding}>
-        {#if seeding}<span class="spinner" aria-hidden="true"></span><span class="sr-only">Adding defaults</span>{:else}Add Defaults{/if}
+        {#if seeding}<span class="spinner-btn-dark" aria-hidden="true"></span>{/if}
+        {seeding ? "Adding…" : "Add Defaults"}
       </button>
       <button class="btn-primary" onclick={() => { showDefine = !showDefine; if (!showDefine) { newName = ""; newDuration = 30; newCategory = "Preventive"; defineError = null; } }}>
         {showDefine ? "Cancel" : "+ Define"}
@@ -157,7 +158,8 @@
     <div class="empty-state">
       <p>No procedure types defined yet.</p>
       <button class="btn-primary" onclick={seed} disabled={seeding}>
-        {#if seeding}<span class="spinner" aria-hidden="true"></span><span class="sr-only">Adding defaults</span>{:else}Add 10 defaults{/if}
+        {#if seeding}<span class="spinner-btn" aria-hidden="true"></span>{/if}
+        {seeding ? "Adding…" : "Add 10 defaults"}
       </button>
     </div>
   {/if}
@@ -167,7 +169,7 @@
       {#if defineError}<p class="error">{defineError}</p>{/if}
       <div class="row">
         <div class="field">
-          <label for="proc-name">Name <span class="required-star" aria-hidden="true">*</span></label>
+          <label for="proc-name">Name <span class="required-mark" aria-hidden="true">*</span></label>
           <input id="proc-name" bind:value={newName} placeholder="e.g. Root Canal" />
         </div>
         <div class="field" style="max-width:150px">
@@ -182,7 +184,8 @@
         </div>
         <div class="field" style="justify-content:flex-end; padding-top:1.4rem">
           <button type="submit" class="btn-primary" disabled={defining}>
-            {#if defining}<span class="spinner" aria-hidden="true"></span><span class="sr-only">Defining</span>{:else}Define{/if}
+            {#if defining}<span class="spinner-btn" aria-hidden="true"></span>{/if}
+            {defining ? "Defining…" : "Define"}
           </button>
         </div>
       </div>
@@ -223,7 +226,8 @@
               </div>
               <div class="edit-row-actions">
                 <button class="btn-sm" onclick={() => saveEdit(pt.id)} disabled={saving}>
-                  {#if saving}<span class="spinner" aria-hidden="true"></span><span class="sr-only">Saving</span>{:else}Save{/if}
+                  {#if saving}<span class="spinner-btn" aria-hidden="true"></span>{/if}
+                  {saving ? "Saving…" : "Save"}
                 </button>
                 <button class="btn-sm btn-ghost" onclick={() => (editingId = null)}>Cancel</button>
               </div>
@@ -247,7 +251,8 @@
             <div class="type-actions">
               <button class="btn-sm btn-ghost" onclick={() => startEdit(pt)} disabled={togglingId === pt.id}>Edit</button>
               <button class="btn-sm btn-ghost" onclick={() => toggleActive(pt)} disabled={togglingId === pt.id}>
-                {#if togglingId === pt.id}<span class="spinner" aria-hidden="true"></span><span class="sr-only">Deactivating</span>{:else}Deactivate{/if}
+                {#if togglingId === pt.id}<span class="spinner-btn-dark" aria-hidden="true"></span>{/if}
+                {togglingId === pt.id ? "Updating…" : "Deactivate"}
               </button>
             </div>
           {/if}
@@ -270,7 +275,8 @@
             </div>
             <div class="type-actions">
               <button class="btn-sm btn-ghost" onclick={() => toggleActive(pt)} disabled={togglingId === pt.id}>
-                {#if togglingId === pt.id}<span class="spinner" aria-hidden="true"></span><span class="sr-only">Reactivating</span>{:else}Reactivate{/if}
+                {#if togglingId === pt.id}<span class="spinner-btn-dark" aria-hidden="true"></span>{/if}
+                {togglingId === pt.id ? "Updating…" : "Reactivate"}
               </button>
             </div>
           </div>

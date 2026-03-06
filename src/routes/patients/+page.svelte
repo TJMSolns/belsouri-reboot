@@ -104,10 +104,10 @@
 
   async function register() {
     if (!regFirstName.trim() || !regLastName.trim()) {
-      regError = "First and last name are required"; return;
+      regError = "First Name and Last Name are both required to register a patient."; return;
     }
     if (!regPhone.trim() && !regEmail.trim()) {
-      regError = "At least one of phone or email is required"; return;
+      regError = "At least one contact method is required — enter a Phone number or Email address."; return;
     }
     registering = true;
     regError = null;
@@ -301,11 +301,11 @@
       {#if regWarning}<p class="warning">⚠ {regWarning}</p>{/if}
       <div class="form-row">
         <div class="field">
-          <label for="reg-first-name">First Name *</label>
+          <label for="reg-first-name">First Name <span class="required-mark" aria-hidden="true">*</span></label>
           <input id="reg-first-name" bind:value={regFirstName} placeholder="Maria" />
         </div>
         <div class="field">
-          <label for="reg-last-name">Last Name *</label>
+          <label for="reg-last-name">Last Name <span class="required-mark" aria-hidden="true">*</span></label>
           <input id="reg-last-name" bind:value={regLastName} placeholder="Brown" />
         </div>
         <div class="field">
@@ -331,7 +331,8 @@
       </div>
       <div class="form-actions">
         <button class="btn-primary" onclick={register} disabled={registering}>
-          {#if registering}<span class="spinner" aria-hidden="true"></span><span class="sr-only">Registering</span>{:else}Register{/if}
+          {#if registering}<span class="spinner-btn" aria-hidden="true"></span>{/if}
+          {registering ? "Registering…" : "Register"}
         </button>
         {#if regWarning}
           <button class="btn-secondary" onclick={() => { showRegister = false; regWarning = null; }}>
@@ -429,11 +430,11 @@
                   {#if demoError}<p class="error">{demoError}</p>{/if}
                   <div class="edit-grid">
                     <div class="field">
-                      <label for="demo-first-{expandedId}">First Name</label>
+                      <label for="demo-first-{expandedId}">First Name <span class="required-mark" aria-hidden="true">*</span></label>
                       <input id="demo-first-{expandedId}" bind:value={demoFirstName} />
                     </div>
                     <div class="field">
-                      <label for="demo-last-{expandedId}">Last Name</label>
+                      <label for="demo-last-{expandedId}">Last Name <span class="required-mark" aria-hidden="true">*</span></label>
                       <input id="demo-last-{expandedId}" bind:value={demoLastName} />
                     </div>
                     <div class="field">
@@ -459,7 +460,8 @@
                   </div>
                   <div class="edit-actions">
                     <button class="btn-sm" onclick={saveDemographics} disabled={demoSaving}>
-                      {#if demoSaving}<span class="spinner" aria-hidden="true"></span><span class="sr-only">Saving</span>{:else}Save{/if}
+                      {#if demoSaving}<span class="spinner-btn" aria-hidden="true"></span>{/if}
+                      {demoSaving ? "Saving…" : "Save"}
                     </button>
                     <button class="btn-sm btn-ghost" onclick={() => (editingSection = null)}>Cancel</button>
                   </div>
@@ -505,7 +507,8 @@
                   </div>
                   <div class="edit-actions">
                     <button class="btn-sm" onclick={saveContact} disabled={contSaving}>
-                      {#if contSaving}<span class="spinner" aria-hidden="true"></span><span class="sr-only">Saving</span>{:else}Save{/if}
+                      {#if contSaving}<span class="spinner-btn" aria-hidden="true"></span>{/if}
+                      {contSaving ? "Saving…" : "Save"}
                     </button>
                     <button class="btn-sm btn-ghost" onclick={() => (editingSection = null)}>Cancel</button>
                   </div>
@@ -542,7 +545,8 @@
                     rows={2}
                   ></textarea>
                   <button class="btn-sm" onclick={addNote} disabled={noteAdding || !noteText.trim()}>
-                    {#if noteAdding}<span class="spinner" aria-hidden="true"></span><span class="sr-only">Adding</span>{:else}Add Note{/if}
+                    {#if noteAdding}<span class="spinner-btn" aria-hidden="true"></span>{/if}
+                    {noteAdding ? "Adding…" : "Add Note"}
                   </button>
                 </div>
               </section>

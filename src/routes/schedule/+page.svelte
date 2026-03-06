@@ -726,11 +726,11 @@
         <p class="book-section-label">When &amp; where</p>
         <div class="book-row">
           <div class="form-field" style="flex:1">
-            <label class="field-label" for="book-date">Date</label>
+            <label class="field-label" for="book-date">Date <span class="required-mark" aria-hidden="true">*</span></label>
             <input id="book-date" type="date" bind:value={bookStartDate} />
           </div>
           <div class="form-field" style="flex:1">
-            <label class="field-label" for="book-office">Office</label>
+            <label class="field-label" for="book-office">Office <span class="required-mark" aria-hidden="true">*</span></label>
             <select id="book-office" bind:value={bookOfficeId}>
               {#each offices as o}<option value={o.id}>{o.name}</option>{/each}
             </select>
@@ -855,7 +855,8 @@
         onclick={doBookAppointment}
         disabled={bookLoading || !bookPatientId || !bookProviderId || !bookProcedureId || !bookStartTime}
       >
-        {#if bookLoading}<span class="spinner" aria-hidden="true"></span><span class="sr-only">Booking</span>{:else}Book appointment{/if}
+        {#if bookLoading}<span class="spinner-btn" aria-hidden="true"></span>{/if}
+        {bookLoading ? "Booking…" : "Book appointment"}
       </button>
     </div>
   </div>
@@ -901,10 +902,12 @@
           {#if !showCancelConfirm}
             <div class="detail-actions">
               <button class="btn btn-primary btn-sm" onclick={() => doComplete(appt.appointment_id)} disabled={completingAppt || noShowingAppt || cancellingAppt || reschedLoading}>
-                {#if completingAppt}<span class="spinner" aria-hidden="true"></span><span class="sr-only">Completing</span>{:else}Mark complete{/if}
+                {#if completingAppt}<span class="spinner-btn" aria-hidden="true"></span>{/if}
+                {completingAppt ? "Completing…" : "Mark complete"}
               </button>
               <button class="btn btn-ghost btn-sm" onclick={() => doNoShow(appt.appointment_id)} disabled={completingAppt || noShowingAppt || cancellingAppt || reschedLoading}>
-                {#if noShowingAppt}<span class="spinner" aria-hidden="true"></span><span class="sr-only">Saving</span>{:else}No-show{/if}
+                {#if noShowingAppt}<span class="spinner-btn-dark" aria-hidden="true"></span>{/if}
+                {noShowingAppt ? "Saving…" : "No-show"}
               </button>
               <button class="btn btn-ghost btn-sm" onclick={() => { if (showReschedule) closeReschedule(); else openReschedule(); }} disabled={completingAppt || noShowingAppt || cancellingAppt || reschedLoading}>
                 Reschedule
@@ -923,7 +926,8 @@
               <div class="cancel-confirm-actions">
                 <button class="btn btn-ghost btn-sm" onclick={() => (showCancelConfirm = false)}>Go back</button>
                 <button class="btn btn-destructive btn-sm" onclick={() => doCancel(appt.appointment_id)} disabled={cancellingAppt}>
-                  {#if cancellingAppt}<span class="spinner" aria-hidden="true"></span><span class="sr-only">Cancelling</span>{:else}Confirm cancellation{/if}
+                  {#if cancellingAppt}<span class="spinner-btn" aria-hidden="true"></span>{/if}
+                  {cancellingAppt ? "Cancelling…" : "Confirm cancellation"}
                 </button>
               </div>
             </div>
@@ -987,7 +991,8 @@
                 onclick={() => doReschedule(appt.appointment_id)}
                 disabled={reschedLoading || !reschedProviderId || !reschedTime}
               >
-                {#if reschedLoading}<span class="spinner" aria-hidden="true"></span><span class="sr-only">Rescheduling</span>{:else}Confirm reschedule{/if}
+                {#if reschedLoading}<span class="spinner-btn" aria-hidden="true"></span>{/if}
+              {reschedLoading ? "Rescheduling…" : "Confirm reschedule"}
               </button>
             </div>
           </div>
@@ -1025,7 +1030,8 @@
               disabled={noteLoading || !noteText.trim()}
               style="margin-top: var(--space-2);"
             >
-              {#if noteLoading}<span class="spinner" aria-hidden="true"></span><span class="sr-only">Saving</span>{:else}Add note{/if}
+              {#if noteLoading}<span class="spinner-btn-dark" aria-hidden="true"></span>{/if}
+              {noteLoading ? "Saving…" : "Add note"}
             </button>
           </div>
         </div>
@@ -1122,7 +1128,7 @@
         </div>
         <div class="drawer-body">
           <div class="form-field">
-            <label class="field-label" for="ps-staff">Staff member <span class="required-star" aria-hidden="true">*</span></label>
+            <label class="field-label" for="ps-staff">Staff member <span class="required-mark" aria-hidden="true">*</span></label>
             <select id="ps-staff" bind:value={planShiftStaffId} onchange={() => { const s = allStaff.find(m => m.staff_member_id === planShiftStaffId); if (s && s.roles.length > 0 && !s.roles.includes(planShiftRole)) planShiftRole = s.roles[0]; else if (!s || s.roles.length === 0) planShiftRole = ""; }}>
               <option value="">— Select staff member —</option>
               {#each allStaff as s}
@@ -1131,7 +1137,7 @@
             </select>
           </div>
           <div class="form-field">
-            <label class="field-label" for="ps-office">Office <span class="required-star" aria-hidden="true">*</span></label>
+            <label class="field-label" for="ps-office">Office <span class="required-mark" aria-hidden="true">*</span></label>
             <select id="ps-office" bind:value={planShiftOfficeId}>
               {#each offices as o}
                 <option value={o.id}>{o.name}</option>
@@ -1155,7 +1161,7 @@
             </div>
           </div>
           <div class="form-field">
-            <label class="field-label" for="ps-role">Role for this shift <span class="required-star" aria-hidden="true">*</span></label>
+            <label class="field-label" for="ps-role">Role for this shift <span class="required-mark" aria-hidden="true">*</span></label>
             {#if planShiftStaffId}
               {@const staffMember = allStaff.find((s) => s.staff_member_id === planShiftStaffId)}
               {#if staffMember && staffMember.roles.length > 0}
@@ -1186,7 +1192,8 @@
             disabled={planShiftLoading || !planShiftStaffId || !planShiftOfficeId || !planShiftRole.trim()}
           >
             {#if planShiftLoading}
-              <span class="spinner" aria-hidden="true"></span><span class="sr-only">Saving</span>
+              <span class="spinner-btn" aria-hidden="true"></span>
+              Saving…
             {:else}
               <svg viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" stroke="currentColor" fill="none" aria-hidden="true" class="icon-sm"><path d="M12 5v14M5 12h14"/></svg>
               Plan shift

@@ -73,7 +73,7 @@
   {/if}
 
   <div class="field">
-    <label for="pname">Practice Name <span class="req">*</span></label>
+    <label for="pname">Practice Name <span class="required-mark" aria-hidden="true">*</span></label>
     <input id="pname" bind:value={name} placeholder="e.g. Smile Dental" />
   </div>
 
@@ -121,7 +121,8 @@
 
   <div class="actions">
     <button type="submit" class="btn-primary" disabled={saving}>
-      {#if saving}<span class="spinner" aria-hidden="true"></span><span class="sr-only">Saving</span>{:else}Save{/if}
+      {#if saving}<span class="spinner-btn" aria-hidden="true"></span>{/if}
+      {saving ? "Saving…" : "Save"}
     </button>
   </div>
 </form>
@@ -132,7 +133,6 @@
   .form-error { color: var(--healthy-coral-dk); font-size: var(--text-sm); margin-bottom: var(--space-3); }
   .field { display: flex; flex-direction: column; gap: var(--space-1); margin-bottom: var(--space-4); }
   .field label { font-size: var(--text-xs); font-weight: 600; color: var(--abyss-navy); font-family: var(--font-body); }
-  .req { color: var(--healthy-coral); }
   .row { display: flex; gap: var(--space-4); }
   .row .field { flex: 1; }
   .actions { display: flex; align-items: center; gap: var(--space-4); margin-top: var(--space-5); }

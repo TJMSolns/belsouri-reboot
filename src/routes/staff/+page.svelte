@@ -217,7 +217,7 @@
   }
 
   async function claim() {
-    if (!claimName.trim()) { claimError = "Practice Manager name is required to claim this role."; return; }
+    if (!claimName.trim()) { claimError = "Name is required — enter your full name to claim the Practice Manager role."; return; }
     claiming = true; claimError = null;
     const r = await commands.claimPracticeManagerRole(claimName.trim());
     claiming = false;
@@ -229,7 +229,7 @@
   }
 
   async function registerStaff() {
-    if (!regName.trim()) { regError = "Staff member name is required."; return; }
+    if (!regName.trim()) { regError = "Name is required — enter the staff member's full name."; return; }
     registering = true; regError = null;
     const r = await commands.registerStaffMember(
       regName.trim(),
@@ -402,12 +402,13 @@
       <p class="hint">No Practice Manager exists yet. Enter your name to become the first Practice Manager.</p>
       {#if claimError}<p class="error">{claimError}</p>{/if}
       <div class="field">
-        <label for="claim-name">Name</label>
+        <label for="claim-name">Name <span class="required-mark" aria-hidden="true">*</span></label>
         <input id="claim-name" bind:value={claimName} placeholder="Dr. Spence" />
       </div>
       <div class="form-actions">
         <button class="btn-primary" onclick={claim} disabled={claiming}>
-          {#if claiming}<span class="spinner" aria-hidden="true"></span><span class="sr-only">Claiming</span>{:else}Claim{/if}
+          {#if claiming}<span class="spinner-btn" aria-hidden="true"></span>{/if}
+          {claiming ? "Claiming…" : "Claim"}
         </button>
       </div>
     </div>
@@ -420,7 +421,7 @@
       {#if regError}<p class="error">{regError}</p>{/if}
       <div class="form-row">
         <div class="field">
-          <label for="reg-name">Name *</label>
+          <label for="reg-name">Name <span class="required-mark" aria-hidden="true">*</span></label>
           <input id="reg-name" bind:value={regName} placeholder="Maria Brown" />
         </div>
         <div class="field" style="max-width:140px">
@@ -448,7 +449,8 @@
       </div>
       <div class="form-actions">
         <button class="btn-primary" onclick={registerStaff} disabled={registering}>
-          {#if registering}<span class="spinner" aria-hidden="true"></span><span class="sr-only">Registering</span>{:else}Register{/if}
+          {#if registering}<span class="spinner-btn" aria-hidden="true"></span>{/if}
+          {registering ? "Registering…" : "Register"}
         </button>
       </div>
     </div>
@@ -564,7 +566,8 @@
                   {#each ROLES.filter((r) => !sm.roles.includes(r)) as r}<option value={r}>{formatRoleName(r)}</option>{/each}
                 </select>
                 <button class="btn-sm" onclick={() => doAssignRole(sm.staff_member_id)} disabled={roleAdding}>
-                  {#if roleAdding}<span class="spinner" aria-hidden="true"></span><span class="sr-only">Adding role</span>{:else}Add Role{/if}
+                  {#if roleAdding}<span class="spinner-btn" aria-hidden="true"></span>{/if}
+                  {roleAdding ? "Adding…" : "Add Role"}
                 </button>
               </div>
               <!-- Provider role guidance (SCH-3) -->
@@ -600,7 +603,8 @@
                   <label for="pin-new-{sm.staff_member_id}" class="sr-only">New PIN (4–6 digits)</label>
                   <input id="pin-new-{sm.staff_member_id}" type="password" inputmode="numeric" maxlength="6" placeholder="4–6 digits" bind:value={newPin} class="pin-input" />
                   <button class="btn-sm" onclick={() => doSetPin(sm.staff_member_id)} disabled={pinSaving}>
-                    {#if pinSaving}<span class="spinner" aria-hidden="true"></span><span class="sr-only">Saving</span>{:else}Save{/if}
+                    {#if pinSaving}<span class="spinner-btn" aria-hidden="true"></span>{/if}
+                    {pinSaving ? "Saving…" : "Save"}
                   </button>
                   <button class="btn-sm btn-ghost" onclick={() => pinSection = null}>Cancel</button>
                 </div>
@@ -611,7 +615,8 @@
                   <label for="pin-new-change-{sm.staff_member_id}" class="sr-only">New PIN</label>
                   <input id="pin-new-change-{sm.staff_member_id}" type="password" inputmode="numeric" maxlength="6" placeholder="New PIN" bind:value={newPin} class="pin-input" />
                   <button class="btn-sm" onclick={() => doChangePin(sm.staff_member_id)} disabled={pinSaving}>
-                    {#if pinSaving}<span class="spinner" aria-hidden="true"></span><span class="sr-only">Saving</span>{:else}Save{/if}
+                    {#if pinSaving}<span class="spinner-btn" aria-hidden="true"></span>{/if}
+                    {pinSaving ? "Saving…" : "Save"}
                   </button>
                   <button class="btn-sm btn-ghost" onclick={() => pinSection = null}>Cancel</button>
                 </div>
@@ -623,7 +628,8 @@
                   <label for="pin-verify-{sm.staff_member_id}" class="sr-only">Verify PIN</label>
                   <input id="pin-verify-{sm.staff_member_id}" type="password" inputmode="numeric" maxlength="6" placeholder="Verify PIN" bind:value={verifyPin} class="pin-input" />
                   <button class="btn-sm btn-ghost" onclick={() => doVerifyPin(sm.staff_member_id)} disabled={verifying}>
-                    {#if verifying}<span class="spinner" aria-hidden="true"></span><span class="sr-only">Verifying</span>{:else}Verify{/if}
+                    {#if verifying}<span class="spinner-btn-dark" aria-hidden="true"></span>{/if}
+                    {verifying ? "Verifying…" : "Verify"}
                   </button>
                   {#if verifyResult === true}<span class="verify-ok">✓ Correct</span>{/if}
                   {#if verifyResult === false}<span class="verify-fail">✗ Incorrect</span>{/if}

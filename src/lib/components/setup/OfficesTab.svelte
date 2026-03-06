@@ -221,16 +221,17 @@
       {#if createError}<p class="error">{createError}</p>{/if}
       <div class="row">
         <div class="field">
-          <label for="new-office-name">Name <span class="required-star" aria-hidden="true">*</span></label>
+          <label for="new-office-name">Name <span class="required-mark" aria-hidden="true">*</span></label>
           <input id="new-office-name" bind:value={newName} placeholder="e.g. Kingston" />
         </div>
         <div class="field" style="max-width:120px">
-          <label for="new-office-chairs">Chairs <span class="required-star" aria-hidden="true">*</span></label>
+          <label for="new-office-chairs">Chairs <span class="required-mark" aria-hidden="true">*</span></label>
           <input id="new-office-chairs" type="number" min="1" bind:value={newChairs} />
         </div>
         <div class="field" style="justify-content:flex-end; padding-top:1.4rem">
           <button type="submit" class="btn-primary" disabled={creating}>
-            {#if creating}<span class="spinner" aria-hidden="true"></span><span class="sr-only">Creating</span>{:else}Create{/if}
+            {#if creating}<span class="spinner-btn" aria-hidden="true"></span>{/if}
+            {creating ? "Creating…" : "Create"}
           </button>
         </div>
       </div>
