@@ -44,6 +44,22 @@
   --color-role-staff:    #6B7C82;
   --color-role-staff-lt: #F4F6F7;
 
+  /* ── Procedure category colours ──────────────────────────────── */
+  --color-cat-consult:     #f0c040;
+  --color-cat-preventive:  #4a90d9;
+  --color-cat-restorative: #27ae60;   /* same as --island-palm */
+  --color-cat-invasive:    #e74c3c;
+  --color-cat-cosmetic:    #9b59b6;
+  --color-cat-diagnostic:  #95a5a6;
+
+  /* ── Archived / inactive state ────────────────────────────────── */
+  --color-archived:    #a06030;
+  --color-archived-lt: #f0e6d3;
+
+  /* ── Provider type badge ──────────────────────────────────────── */
+  --color-provider-type:    #1a5cb3;
+  --color-provider-type-lt: #e8f0fe;
+
   /* ── Typography ────────────────────────────────────────────────── */
   --font-heading: 'Lexend', system-ui, sans-serif;
   --font-body:    'Inter', system-ui, sans-serif;

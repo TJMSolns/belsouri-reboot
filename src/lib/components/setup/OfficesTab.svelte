@@ -446,7 +446,7 @@
   .office-name { font-weight: 600; font-size: var(--text-sm); color: var(--abyss-navy); font-family: var(--font-body); }
   .office-meta { font-size: var(--text-xs); color: var(--slate-fog); }
   .badge { font-size: var(--text-xs); padding: 2px var(--space-2); border-radius: var(--radius-full); font-weight: 600; font-family: var(--font-body); }
-  .archived-badge { background: #f0e6d3; color: #a06030; }
+  .archived-badge { background: var(--color-archived-lt); color: var(--color-archived); }
   .chevron { color: var(--slate-fog); font-size: var(--text-xs); }
 
   .office-detail { padding: 0 var(--space-4) var(--space-4); border-top: 1px solid var(--pearl-mist-dk); }
@@ -476,7 +476,7 @@
 
   .btn-primary {
     display: inline-flex; align-items: center; min-height: 36px; padding: 0 var(--space-4);
-    background: var(--caribbean-teal); color: #fff; border: none;
+    background: var(--caribbean-teal); color: white; border: none;
     border-radius: var(--radius-md); font-family: var(--font-heading); font-size: var(--text-sm);
     font-weight: 600; cursor: pointer; transition: background var(--transition-fast);
   }
@@ -490,5 +490,5 @@
     font-size: var(--text-xs); font-family: var(--font-body); font-weight: 600; cursor: pointer;
     transition: background var(--transition-fast);
   }
-  .btn-danger-sm:hover { background: #fef2f0; }
+  .btn-danger-sm:hover { background: var(--healthy-coral-lt); }
 </style>

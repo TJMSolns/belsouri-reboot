@@ -164,7 +164,7 @@
 
   /* ── Checklist panel ─────────────────────────────────────────────── */
   .checklist-panel {
-    background: #fff;
+    background: white;
     border-radius: var(--radius-lg);
     box-shadow: var(--shadow-sm);
     padding: var(--space-5) var(--space-6);

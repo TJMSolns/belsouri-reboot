@@ -269,7 +269,7 @@ Now that the design system is active (`src/app.css`, `CLAUDE.md` rules, POL-001/
 | DS-3.2 | Audit `/setup` page and Setup tab components | `/ux-review` + `/copy-check` + `/icon-audit`. Known issues: hardcoded hex, inline styles, UX-4.1 sheet pattern needed. |
 | DS-3.3 | Audit `/patients` page | `/ux-review` + `/copy-check` + `/icon-audit`. Check: error messages name specific object, search empty state has clear CTA, no `confirm()`/`alert()`. |
 | DS-3.4 | Audit `/staff` page | `/ux-review` + `/copy-check` + `/icon-audit`. Check: PIN ops use confirmation dialog not OS `confirm()`, role badges have icons, error messages specific. |
-| DS-3.5 | Audit `/schedule` page | `/ux-review` (booking drawer, call list sheet, OS dialogs). This page has the most UX-1 issues — `/ux-review` will produce the richest output. |
+| ~~DS-3.5~~ | ~~Audit `/schedule` page~~ | **DONE** — Watchdog pass (ux-review + copy-check + icon-audit) ran 2026-03-06. 7 issues found and fixed: UX-1/2/3 error toasts on silent failures (call list, book roster, resched roster); UX-4 shift-cancel opacity 0.35→0.6 (touch-safe); CP-1 dayAbbr locale en-US→en-JM; CP-2 PracticeManager display helper; IC-1 cancel icon 16px→20px. |
 
 **How to run:** Open the page file in the IDE, then: `/ux-review src/routes/[page]/+page.svelte`, `/copy-check src/routes/[page]/+page.svelte`, `/icon-audit src/routes/[page]/+page.svelte`. Each skill returns a structured pass/flag/fail report.
 
@@ -391,6 +391,7 @@ Revisit weekly. These are ongoing explorations, not blocking items.
 |------|-------------|--------|
 | Agent strategy | Custom agents for ceremony checking, governance enforcement, context sharing | Exploring |
 | Token efficiency | Separating concerns across agent contexts to stay within token budgets | Exploring |
+| Watchdog execution context | Watchdog skills (ux-review/copy-check/icon-audit) currently run in the main thread so the Skill tool is available. Consider: foreground general-purpose subagent gives a fresh/empty context (lower token cost) while still allowing user permission approvals. Background agents cannot run skills (no user approval path). Evaluate whether foreground subagent watchdog saves enough tokens to justify the extra latency. | Proposed |
 | Governance automation | Agents that validate Phase 1/2 artifacts are complete before implementation begins | Exploring |
 | Lessons-learned agent | Automated capture of insights during development | Exploring |
 | Design system skills | `/ux-review`, `/copy-check`, `/icon-audit` — validate UI against style guide | **DONE** — Live in `.claude/skills/`. Use during DS-3 audit and on all future Svelte work. |

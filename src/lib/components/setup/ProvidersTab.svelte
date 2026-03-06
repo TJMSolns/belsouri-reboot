@@ -444,8 +444,8 @@
   .provider-name { font-weight: 600; font-size: var(--text-sm); color: var(--abyss-navy); font-family: var(--font-body); }
   .meta { font-size: var(--text-xs); color: var(--slate-fog); }
   .badge { font-size: var(--text-xs); padding: 2px var(--space-2); border-radius: var(--radius-full); font-weight: 600; font-family: var(--font-body); }
-  .type-badge { background: #e8f0fe; color: #1a5cb3; }
-  .archived-badge { background: #f0e6d3; color: #a06030; }
+  .type-badge { background: var(--color-provider-type-lt); color: var(--color-provider-type); }
+  .archived-badge { background: var(--color-archived-lt); color: var(--color-archived); }
   .chevron { color: var(--slate-fog); font-size: var(--text-xs); }
 
   .provider-detail { padding: 0 var(--space-4) var(--space-4); border-top: 1px solid var(--pearl-mist-dk); }
@@ -458,10 +458,10 @@
   .office-chips { display: flex; flex-wrap: wrap; gap: var(--space-2); }
   .chip {
     display: flex; align-items: center; gap: var(--space-1);
-    padding: 3px var(--space-3); background: #e8f0fe; border-radius: var(--radius-full);
-    font-size: var(--text-xs); color: #1a5cb3; font-weight: 600; font-family: var(--font-body);
+    padding: 3px var(--space-3); background: var(--color-provider-type-lt); border-radius: var(--radius-full);
+    font-size: var(--text-xs); color: var(--color-provider-type); font-weight: 600; font-family: var(--font-body);
   }
-  .chip-remove { background: none; border: none; cursor: pointer; color: #1a5cb3; font-size: var(--text-sm); padding: 0; line-height: 1; }
+  .chip-remove { background: none; border: none; cursor: pointer; color: var(--color-provider-type); font-size: var(--text-sm); padding: 0; line-height: 1; }
   .chip-add { background: white; border: 1px dashed var(--pearl-mist-dk); color: var(--slate-fog); cursor: pointer; font-family: var(--font-body); }
   .chip-add:hover { border-color: var(--abyss-navy); color: var(--abyss-navy); }
 
@@ -483,7 +483,7 @@
 
   .btn-primary {
     display: inline-flex; align-items: center; min-height: 36px; padding: 0 var(--space-4);
-    background: var(--caribbean-teal); color: #fff; border: none;
+    background: var(--caribbean-teal); color: white; border: none;
     border-radius: var(--radius-md); font-family: var(--font-heading); font-size: var(--text-sm);
     font-weight: 600; cursor: pointer; transition: background var(--transition-fast);
   }
@@ -504,5 +504,5 @@
     font-size: var(--text-xs); font-family: var(--font-body); font-weight: 600; cursor: pointer;
     transition: background var(--transition-fast);
   }
-  .btn-danger-sm:hover { background: #fef2f0; }
+  .btn-danger-sm:hover { background: var(--healthy-coral-lt); }
 </style>

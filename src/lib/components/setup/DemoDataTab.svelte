@@ -141,7 +141,7 @@
   }
   .demo-card--danger {
     border-color: var(--healthy-coral);
-    background: var(--healthy-coral-lt, #fff5f5);
+    background: var(--healthy-coral-lt);
   }
   .demo-card-header {
     display: flex;

@@ -6,6 +6,7 @@
     ProviderScheduleEntry, OfficeDto, ProviderDto, StaffShiftDto, StaffMemberDto,
   } from "$lib/bindings";
   import { getErrorMessage } from "$lib/utils/api";
+  import { formatDate } from "$lib/utils/date";
   import { toast } from "$lib/stores/toast";
   import { confirm } from "$lib/stores/confirm";
   import { onMount } from "svelte";
@@ -223,12 +224,6 @@
     const period = h >= 12 ? "PM" : "AM";
     const h12 = h % 12 || 12;
     return `${h12}:${m.toString().padStart(2, "0")} ${period}`;
-  }
-
-  function formatDate(isoLocal: string): string {
-    return new Date(isoLocal.slice(0, 10) + "T12:00:00").toLocaleDateString("en-JM", {
-      day: "numeric", month: "short", year: "numeric",
-    });
   }
 
   function buildStartTime(date: string, time: string): string {
@@ -1258,7 +1253,7 @@
                               class="shift-cancel-btn"
                               onclick={() => doCancelShift(shift)}
                               disabled={cancellingShiftId === shift.shift_id}
-                              aria-label="Cancel shift for {shift.staff_name} on {shift.date}"
+                              aria-label="Cancel shift for {shift.staff_name} on {formatDate(shift.date)}"
                               title="Cancel shift"
                             >
                               {#if cancellingShiftId === shift.shift_id}

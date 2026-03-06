@@ -138,7 +138,7 @@
   .actions { display: flex; align-items: center; gap: var(--space-4); margin-top: var(--space-5); }
   .btn-primary {
     display: inline-flex; align-items: center; min-height: 44px; padding: 0 var(--space-6);
-    background: var(--caribbean-teal); color: #fff; border: none;
+    background: var(--caribbean-teal); color: white; border: none;
     border-radius: var(--radius-md); font-family: var(--font-heading); font-size: var(--text-sm);
     font-weight: 600; cursor: pointer; transition: background var(--transition-fast);
   }

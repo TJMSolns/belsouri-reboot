@@ -7,12 +7,12 @@
 
   const CATEGORIES = ["Consult", "Preventive", "Restorative", "Invasive", "Cosmetic", "Diagnostic"];
   const CATEGORY_COLORS: Record<string, string> = {
-    Consult: "#f0c040",
-    Preventive: "#4a90d9",
-    Restorative: "#27ae60",
-    Invasive: "#e74c3c",
-    Cosmetic: "#9b59b6",
-    Diagnostic: "#95a5a6",
+    Consult:     "var(--color-cat-consult)",
+    Preventive:  "var(--color-cat-preventive)",
+    Restorative: "var(--color-cat-restorative)",
+    Invasive:    "var(--color-cat-invasive)",
+    Cosmetic:    "var(--color-cat-cosmetic)",
+    Diagnostic:  "var(--color-cat-diagnostic)",
   };
 
   const PROVIDER_TYPE_OPTIONS = [
@@ -222,7 +222,7 @@
             </div>
           {:else}
             <div class="type-info">
-              <span class="cat-dot" style="background:{CATEGORY_COLORS[pt.category] ?? '#ccc'}"></span>
+              <span class="cat-dot" style="background:{CATEGORY_COLORS[pt.category] ?? 'var(--pearl-mist-dk)'}"></span>
               <span class="type-name">{pt.name}</span>
               <span class="badge cat-badge" style="background:{CATEGORY_COLORS[pt.category]}22; color:{CATEGORY_COLORS[pt.category]}">{pt.category}</span>
               <span class="meta">{pt.default_duration_minutes} min</span>
@@ -255,9 +255,9 @@
         {#each inactiveTypes as pt (pt.id)}
           <div class="type-row inactive">
             <div class="type-info">
-              <span class="cat-dot" style="background:#ccc"></span>
+              <span class="cat-dot" style="background:var(--pearl-mist-dk)"></span>
               <span class="type-name">{pt.name}</span>
-              <span class="badge cat-badge" style="background:#f0f0f0; color:#999">{pt.category}</span>
+              <span class="badge cat-badge" style="background:var(--pearl-mist); color:var(--slate-fog)">{pt.category}</span>
               <span class="meta">{pt.default_duration_minutes} min</span>
             </div>
             <div class="type-actions">
@@ -323,7 +323,7 @@
 
   .btn-primary {
     display: inline-flex; align-items: center; min-height: 44px; padding: 0 var(--space-4);
-    background: var(--caribbean-teal); color: #fff; border: none;
+    background: var(--caribbean-teal); color: white; border: none;
     border-radius: var(--radius-md); font-family: var(--font-heading); font-size: var(--text-sm);
     font-weight: 600; cursor: pointer; transition: background var(--transition-fast);
   }
