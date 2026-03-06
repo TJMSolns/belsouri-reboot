@@ -188,6 +188,10 @@
     return new Date(date + "T12:00:00").toLocaleDateString("en-US", { weekday: "long" });
   }
 
+  function displayRole(r: string): string {
+    return r === "PracticeManager" ? "Practice Manager" : r;
+  }
+
   function formatDisplayDate(date: string): string {
     return new Date(date + "T12:00:00").toLocaleDateString("en-JM", {
       weekday: "long",
@@ -283,7 +287,7 @@
   }
 
   function dayAbbr(date: string): string {
-    return new Date(date + "T12:00:00").toLocaleDateString("en-US", { weekday: "short" });
+    return new Date(date + "T12:00:00").toLocaleDateString("en-JM", { weekday: "short" });
   }
 
   function dayNum(date: string): string {
@@ -335,12 +339,14 @@
     const res = await commands.getOfficeProviderSchedule(bookOfficeId, bookStartDate);
     bookRosterLoading = false;
     if (res.status === "ok") bookRoster = res.data;
+    else toast.error("Could not load provider availability. Check your connection and try again.");
   }
 
   async function loadCallList() {
     if (!selectedOfficeId) return;
     const res = await commands.getTomorrowsCallList(selectedOfficeId, callListDate);
     if (res.status === "ok") callList = res.data;
+    else toast.error("Could not load the call list. Check your connection and try again.");
   }
 
   async function loadRoster() {
@@ -610,6 +616,7 @@
     const res = await commands.getOfficeProviderSchedule(reschedOfficeId, reschedDate);
     reschedRosterLoading = false;
     if (res.status === "ok") reschedRoster = res.data;
+    else toast.error("Could not load provider availability for the new date. Try a different date or office.");
   }
 
   async function doReschedule(apptId: string) {
@@ -1124,7 +1131,7 @@
             <select id="ps-staff" bind:value={planShiftStaffId} onchange={() => { const s = allStaff.find(m => m.staff_member_id === planShiftStaffId); if (s && s.roles.length > 0 && !s.roles.includes(planShiftRole)) planShiftRole = s.roles[0]; else if (!s || s.roles.length === 0) planShiftRole = ""; }}>
               <option value="">— Select staff member —</option>
               {#each allStaff as s}
-                <option value={s.staff_member_id}>{s.name} ({s.roles.join(", ")})</option>
+                <option value={s.staff_member_id}>{s.name} ({s.roles.map(displayRole).join(", ")})</option>
               {/each}
             </select>
           </div>
@@ -1230,7 +1237,7 @@
                 <tr>
                   <td class="roster-name-col">
                     <span class="roster-staff-name">{member.name}</span>
-                    <span class="roster-staff-roles text-muted text-xs">{member.roles.join(", ")}</span>
+                    <span class="roster-staff-roles text-muted text-xs">{member.roles.map(displayRole).join(", ")}</span>
                   </td>
                   {#each weekDays as day}
                     {@const dayShifts = memberShifts.filter((s) => s.date === day)}
@@ -1257,7 +1264,7 @@
                               {#if cancellingShiftId === shift.shift_id}
                                 <span class="spinner spinner-xs" aria-hidden="true"></span>
                               {:else}
-                                <svg viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" stroke="currentColor" fill="none" aria-hidden="true" class="icon-xs"><path d="M18 6 6 18M6 6l12 12"/></svg>
+                                <svg viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" stroke="currentColor" fill="none" aria-hidden="true" class="icon-md"><path d="M18 6 6 18M6 6l12 12"/></svg>
                               {/if}
                             </button>
                           {/if}
@@ -2166,16 +2173,16 @@
     justify-content: center;
     min-width: 44px;
     min-height: 44px;
-    opacity: 0.35;
+    opacity: 0.6;
     transition: opacity var(--transition-fast), color var(--transition-fast);
   }
-  .shift-cell:hover .shift-cancel-btn { opacity: 1; }
-  .shift-cancel-btn:hover { color: var(--healthy-coral); }
+  .shift-cancel-btn:hover { opacity: 1; color: var(--healthy-coral); }
   .shift-cancel-btn:disabled { cursor: not-allowed; opacity: 0.5; }
 
   /* ── Icon sizes ──────────────────────────────────────── */
   .icon-sm { width: 16px; height: 16px; flex-shrink: 0; }
   .icon-xs { width: 16px; height: 16px; flex-shrink: 0; }
+  .icon-md { width: 20px; height: 20px; flex-shrink: 0; }
 
   /* ── Roster empty state SVG icon ─────────────────────── */
   .empty-state-icon-svg {
