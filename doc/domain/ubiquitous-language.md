@@ -14,7 +14,7 @@ Living glossary of domain terms. Updated during Event Storming and throughout de
 |------|-----------|----------|-------|
 | **Practice** | The root organizational entity representing a dental clinic business. Singleton per installation. Holds identity (name, contact info, address). | "clinic", "company", "organization" | A practice may operate from multiple offices. Nico refers to "the practice" as the whole business. |
 | **Office** | A physical location where dental services are provided. Each office has its own name, chair capacity, and operating hours. | "location", "branch", "site", "clinic" | Nico uses geographic names: "Kingston", "Montego Bay". Offices are independently configured. |
-| **Provider** | Any dental professional who provides services to patients. Covers dentists, hygienists, and specialists. | "staff", "doctor", "employee", "clinician", "staff member" | Nico confirmed: "provider is a word we use and covers all staff roles." This is the single unified term for all clinical personnel. |
+| **Provider** | A StaffMember with a ClinicalSpecialization (Dentist, Hygienist, or Specialist) who provides services to patients. Shorthand for "a StaffMember with the Provider role." All Providers are StaffMembers; not all StaffMembers are Providers. | "doctor", "clinician", "separate record" | Nico confirmed: "provider is a word we use and covers all staff roles." Provider is NOT a separate aggregate — it is a StaffMember with clinical configuration attached. |
 | **Procedure Type** | A named category of dental service that can be scheduled, with a default duration and color-coded category. | "service", "treatment", "appointment type" | Examples: Cleaning, Consultation, Root Canal. Each has a category and default duration. |
 
 ### Value Objects
@@ -22,7 +22,7 @@ Living glossary of domain terms. Updated during Event Storming and throughout de
 | Term | Definition | Not This | Notes |
 |------|-----------|----------|-------|
 | **Chair** | A physical treatment station within an office. Chair count is the capacity constraint that limits concurrent appointments. | "room", "operatory", "station" | Nico: "how many chairs" = office capacity. Not a bookable resource itself -- just a count that constrains scheduling. |
-| **Provider Type** | Classification of a provider's clinical role: Dentist, Hygienist, or Specialist. | "role", "job title", "staff type" | Nico confirmed these three types are sufficient. |
+| **ClinicalSpecialization** | The clinical type of a Provider: Dentist, Hygienist, or Specialist. Stored on the StaffMember when the Provider role is assigned. Not set for non-clinical StaffMembers. | "provider type", "role", "job title" | Nico confirmed these three types are sufficient. Previously called "ProviderType" on the now-retired Provider aggregate. |
 | **Procedure Category** | A color-coded grouping of procedure types for calendar display and workflow organization. | "procedure group", "service type" | Six categories: Consult (yellow), Preventive (blue), Restorative (green), Invasive (red), Cosmetic (purple), Diagnostic (gray). Nico confirmed all appropriate. |
 | **Operating Hours** | The time range during which an office is open on a given day of the week. | "business hours", "opening times", "schedule" | Per-office, per-day. Days without configured hours are considered closed. |
 | **Availability** | A time window during which a provider works at a specific office on a given day of the week. | "schedule", "shift", "working hours" | Office-scoped -- same provider can have different availability at different offices. Must not overlap across offices on the same day. |
@@ -34,9 +34,7 @@ Living glossary of domain terms. Updated during Event Storming and throughout de
 
 | Term | Definition | Not This | Notes |
 |------|-----------|----------|-------|
-| **Register** (a provider) | Add a new provider to the practice with name and type. | "create", "add", "onboard" | Domain language: providers are "registered", not "created". |
-| **Assign** (provider to office) | Link a provider to an office, enabling availability to be set there. | "add to", "attach", "associate" | Must happen before setting availability. Removal auto-clears availability at that office. |
-| **Archive** | Soft-delete an entity (office or provider), hiding it from active lists but preserving historical data. | "delete", "remove", "deactivate" | Event sourcing is append-only -- no hard deletes. Archived entities can be unarchived. |
+| **Archive** | Soft-delete an entity, hiding it from active lists but preserving historical data. | "delete", "remove", "deactivate" | Event sourcing is append-only -- no hard deletes. Archived entities can be unarchived. |
 | **Define** (a procedure type) | Create a new procedure type with name, category, and default duration. | "create", "add" | Domain language: procedure types are "defined", not "created". |
 | **Deactivate** (a procedure type) | Remove a procedure type from the active list without deleting it. | "delete", "archive", "remove" | Procedure types use deactivate/reactivate, not archive/unarchive, because they are configuration items not people/places. |
 | **Practice Manager** | Role with global authority over all practice configuration. | "admin", "super user", "owner" | Full Practice Setup access. Can delegate permissions to Office Managers (future enhancement). |
@@ -48,7 +46,7 @@ Living glossary of domain terms. Updated during Event Storming and throughout de
 |------|-----------|----------|-------|
 | **Practice Setup** | The bounded context responsible for configuring the static structure of a practice: offices, providers, procedure types, and practice identity. | "admin", "settings", "configuration" | Foundational context -- all other contexts depend on it. Purely upstream (emits events, does not consume from other contexts). |
 | **Bounded Context** | A logical boundary around a cohesive set of domain concepts with their own language and rules. | "module", "service", "component" | Each context has its own aggregates, events, and invariants. |
-| **Aggregate** | A cluster of domain objects treated as a single unit for data changes, with an aggregate root that enforces invariants. | "entity", "model", "record" | Practice Setup has 4 aggregates: Practice, Office, Provider, ProcedureType. |
+| **Aggregate** | A cluster of domain objects treated as a single unit for data changes, with an aggregate root that enforces invariants. | "entity", "model", "record" | Practice Setup has 3 aggregates: Practice, Office, ProcedureType. Provider is NOT a Practice Setup aggregate — clinical configuration lives on StaffMember in Staff Management. |
 | **Domain Event** | An immutable record of something that happened in the domain. Stored in the event store and used to build projections. | "log entry", "notification", "message" | Named in past tense: OfficeCreated, ProviderRegistered. Append-only -- never deleted or modified. |
 | **Projection** | A queryable read model materialized from domain events. Built incrementally, never from full rebuild. | "view", "cache", "snapshot" | Must be deterministic and incremental. O(n^2) full rebuilds caused performance collapse in belsouri-old. |
 | **Command** | A request to change domain state. Validated against invariants before producing events. | "action", "request", "mutation" | Named in imperative: CreateOffice, RegisterProvider. May be rejected if invariants are violated. |
@@ -115,13 +113,13 @@ Living glossary of domain terms. Updated during Event Storming and throughout de
 
 | Term | Definition | Not This | Notes |
 |------|-----------|----------|-------|
-| **StaffMember** | A person who works at the practice in any capacity. Holds one or more roles and authenticates via a PIN for quick identity switching on a shared workstation. | "user", "employee", "user account" | Staff Management is thin: identity + roles + PIN only. Not an HR system. Does not track schedules, hours, or payroll. |
+| **StaffMember** | A person who works at the practice in any capacity. Holds one or more roles and authenticates via a PIN for quick identity switching on a shared workstation. Clinical staff (Providers) are StaffMembers with a ClinicalSpecialization and office availability configured. | "user", "employee", "user account" | The umbrella term for everyone who works at the practice. Non-clinical staff (receptionists, administrators) hold the Staff role. Clinical staff also hold the Provider role and have ClinicalSpecialization + availability data. |
 
 ### Value Objects
 
 | Term | Definition | Not This | Notes |
 |------|-----------|----------|-------|
-| **Role** | A classification of a StaffMember's authority within the application: PracticeManager, Provider, or Staff. A staff member may hold multiple roles simultaneously. | "permission", "user type", "access level" | Three roles at MVP. PracticeManager = full config authority. Provider = clinical scheduling resource. Staff = non-clinical (receptionist, administrator). |
+| **Role** | A classification of a StaffMember's authority within the application: PracticeManager, Provider, or Staff. A staff member may hold multiple roles simultaneously. | "permission", "user type", "access level" | Three roles at MVP. PracticeManager = full config authority. Provider = clinical scheduling resource (holds a ClinicalSpecialization; appears in appointment booking). Staff = non-clinical (receptionist, administrator). Clinical staff are Staff+Provider simultaneously — the Provider role does not replace Staff, it adds clinical capability. |
 | **PIN** | A short numeric code used for quick local identity switching on a shared workstation. Not a password. No remote authentication or session management. | "password", "passcode", "login credential" | Hashed before storage (bcrypt or Argon2). Raw PIN never stored. Required before a StaffMember can be set as the active identity. |
 | **Active Identity** | The StaffMember currently operating the application, established by PIN verification. Provides attribution for all domain commands. | "current user", "logged-in user", "session user" | Not a domain event — identity switching is a session concern. Provides the `staff_member_id` required by all write commands. |
 | **PreferredContactChannel** | The default communication channel for contacting a person: WhatsApp, SMS, Phone, or Email. WhatsApp is the default. | "contact method", "notification preference" | Shared value object used by StaffMember, Patient, and Practice. WhatsApp default reflects Caribbean communication norms. |
@@ -130,7 +128,8 @@ Living glossary of domain terms. Updated during Event Storming and throughout de
 
 | Term | Definition | Not This | Notes |
 |------|-----------|----------|-------|
-| **Register** (a staff member) | Add a new StaffMember to the practice with a name and initial role. | "create", "add", "invite", "onboard" | Domain language: staff members are "registered". Requires an existing active Practice Manager (except first-run bootstrap). |
+| **Register** (a staff member) | Add a new StaffMember to the practice with a name and initial role. | "create", "add", "invite", "onboard" | Domain language: staff members are "registered". Requires an existing active Practice Manager (except first-run bootstrap). Clinical staff are registered as StaffMembers and then have their Provider role and ClinicalSpecialization configured. |
+| **Assign** (provider to office) | Link a StaffMember with the Provider role to an office, enabling availability to be set there. | "add to", "attach", "associate" | Must happen before setting availability. Removal auto-clears availability at that office. Configured on StaffMember — not on a separate Provider aggregate. |
 | **Claim** (Practice Manager role) | The first-run action by which the first person at the keyboard declares themselves Practice Manager before any PM exists. Bypasses the "requires existing PM" precondition. | "register", "self-assign" | Emits PracticeManagerClaimed — a distinct event from RoleAssigned, for clear audit trail. Can only happen once. |
 | **Set PIN** | Establish a PIN for a StaffMember who has none yet. Required before the staff member can switch to active identity. | "create password", "set password" | Command: SetPIN. Emits PINSet. Raw PIN is hashed at the command layer before the event is stored. |
 | **Change PIN** | Replace an existing PIN after verifying the current one. | "reset password", "update password" | Command: ChangePIN. Requires current PIN verification. |
@@ -141,7 +140,7 @@ Living glossary of domain terms. Updated during Event Storming and throughout de
 
 | Term | Definition | Not This | Notes |
 |------|-----------|----------|-------|
-| **Staff Management** | The bounded context that manages the identity, roles, and PIN-based quick switching for all people who work at the practice. Entry point for "who is acting right now." | "HR", "user management", "authentication" | Thin by design. Upstream of all other contexts that need actor identity. Not an HR system. |
+| **Staff Management** | The bounded context that manages the identity, roles, PIN-based quick switching, and clinical configuration (availability, office assignments, exceptions) for all people who work at the practice. Entry point for "who is acting right now" and "when is this provider available." | "HR", "user management", "authentication" | Owns all staff data: identity + roles + PIN + clinical availability. Clinical configuration (previously on the now-retired Provider aggregate) lives here. Upstream of all other contexts that need actor identity or provider availability. |
 
 ### Staff Shift Terms (SCH-5 — confirmed by Tony 2026-03-05)
 
@@ -266,7 +265,7 @@ Terms that must NOT be used in code, tests, or documentation because they are am
 
 | Banned Term | Why | Use Instead |
 |-------------|-----|-------------|
-| staff / staff member | Ambiguous -- could mean clinical or administrative | **Provider** (for clinical staff in scheduling context) |
+| "provider record" / "provider aggregate" | Implies Provider is a separate aggregate from StaffMember — it is not | **StaffMember** with Provider role + ClinicalSpecialization |
 | clinic | Ambiguous -- could mean practice or office | **Practice** (the business) or **Office** (the location) |
 | doctor | Too specific -- excludes hygienists and specialists | **Provider** |
 | room | Implies bookable physical space; our constraint is chair count | **Chair** (as capacity unit) |
@@ -287,3 +286,5 @@ Terms that must NOT be used in code, tests, or documentation because they are am
 ---
 
 **Note**: All Phase 1 ceremony contexts are now documented: Practice Setup, Licensing, Staff Management, Staff Scheduling, Patient Management, and Patient Scheduling. Future additions will cover post-MVP contexts (Clinical Records, Jamaica EHR Integration, Billing/Insurance) as those domains are discovered.
+
+**DM-1 correction (2026-03-06)**: Provider IS A StaffMember. The Provider aggregate (previously in Practice Setup) has been retired. All clinical configuration (ClinicalSpecialization, office assignments, availability, exceptions) now lives on StaffMember in the Staff Management context. The Practice Setup context retains 3 aggregates: Practice, Office, ProcedureType.

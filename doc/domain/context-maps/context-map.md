@@ -1,14 +1,14 @@
 # Context Map
 
-**Last Updated**: 2026-03-04
+**Last Updated**: 2026-03-06 (DM-1: Provider aggregate retired, clinical data moved to Staff Management)
 
 ---
 
 ## Overview
 
-This map shows the bounded contexts in Belsouri, their relationships, and the integration patterns between them. Updated as new contexts are discovered through Phase 1 ceremonies.
+This map shows the bounded contexts in Belsouri, their relationships, and the integration patterns between them.
 
-All MVP bounded contexts have completed Phase 1 and Phase 2 ceremonies. The team is ready to begin Track A — Infrastructure Vertical Slice.
+All MVP bounded contexts have completed Phase 1 and Phase 2 ceremonies. DM-1 correction applied 2026-03-06: Provider IS A StaffMember. Practice Setup no longer owns provider/clinical data — it owns offices, procedure types, and practice identity only.
 
 ---
 
@@ -17,8 +17,8 @@ All MVP bounded contexts have completed Phase 1 and Phase 2 ceremonies. The team
 | Context | Status | Purpose |
 |---------|--------|---------|
 | **Licensing** | Phase 1 + Phase 2 complete — ready for Track A | Machine-bound license validation, eval period, module gating, degraded mode |
-| **Practice Setup** | Phase 1 + Phase 2 complete — ready for Track A | Offices, providers, procedure types, practice identity |
-| **Staff Management** | Phase 1 + Phase 2 complete — ready for Track A | Staff records, roles, credentials, employment status |
+| **Practice Setup** | Phase 1 + Phase 2 complete — DM-1 boundary update 2026-03-06 | Offices, procedure types, practice identity. **No longer owns providers.** |
+| **Staff Management** | Phase 1 + Phase 2 complete — DM-1 boundary update 2026-03-06 | Staff records, roles, PIN, and **clinical configuration (availability, office assignments, exceptions)**. All staff including clinical providers. |
 | **Staff Scheduling** | Phase 1 + Phase 2 complete — ready for Track A (projection-first model confirmed) | Provider availability patterns, working hours, exceptions |
 | **Patient Management** | Phase 1 + Phase 2 complete — ready for Track A | Patient registration, demographics, search |
 | **Patient Scheduling** | Phase 1 + Phase 2 complete — ready for Track A | Appointment booking, today's schedule, cancellations |
@@ -164,11 +164,13 @@ graph TD
 |----------|-------|
 | **Direction** | Staff Management is upstream; Staff Scheduling is downstream |
 | **Pattern** | Open Host Service / Published Language |
-| **What flows** | Staff identity (id, name, role) for availability pattern assignment |
-| **Integration** | Staff Scheduling reads Staff Management projections to know which staff members have schedules to manage. |
-| **Contract** | Confirmed during Phase 2 ceremonies. Staff Scheduling reads staff identity from Staff Management's projection. |
+| **What flows** | Staff identity (id, name, role), ClinicalSpecialization, office assignments, availability windows, exceptions |
+| **Integration** | Staff Scheduling reads Staff Management projections to build the ResolvedSchedule. All provider availability data originates here — not from Practice Setup. |
+| **Contract** | Updated DM-1 (2026-03-06). Staff Scheduling reads the full clinical configuration from Staff Management's projection. |
 
-**Why OHS/PL**: Staff Management publishes a stable staff roster. Staff Scheduling consumes it without translation. Staff Management does not know or care about Staff Scheduling.
+**Why OHS/PL**: Staff Management publishes a stable staff roster including all clinical data. Staff Scheduling consumes it without translation.
+
+**DM-1 update**: This relationship now carries ALL clinical scheduling data (previously split between Practice Setup Provider aggregate and Staff Management). Staff Scheduling no longer needs Practice Setup for provider information.
 
 ---
 
@@ -178,13 +180,11 @@ graph TD
 |----------|-------|
 | **Direction** | Practice Setup is upstream; Staff Scheduling is downstream |
 | **Pattern** | Open Host Service / Published Language |
-| **What flows** | Office configuration (hours, chair count), Provider registration and type |
-| **Integration** | Staff Scheduling reads Practice Setup projections to know which offices and providers exist. It does not modify Practice Setup data. |
-| **Contract** | Staff Scheduling conforms to Practice Setup's event schema and projection format. Confirmed during Phase 2 ceremonies. |
+| **What flows** | Office configuration (hours, chair count) only |
+| **Integration** | Staff Scheduling reads Practice Setup projections to know which offices exist and their operating hours. It does not read provider data from Practice Setup — providers are now in Staff Management. |
+| **Contract** | Staff Scheduling conforms to Practice Setup's office schema. |
 
-**Why OHS/PL**: Practice Setup publishes a stable set of events and projections. Staff Scheduling consumes them as-is without translation. The "language" is shared (same Office, Provider terms). Practice Setup doesn't know or care about Staff Scheduling.
-
-**Boundary note**: Provider availability (weekly schedule per office) and exceptions (vacations) are currently modeled in Practice Setup because they are part of provider configuration. If Staff Scheduling needs richer scheduling concepts (shift patterns, approval workflows, time-off requests with denial logic), availability and exceptions may migrate to Staff Scheduling. This boundary was reviewed during Phase 2 ceremonies and retained as-is for MVP.
+**DM-1 update**: Provider availability, office assignments, and exceptions no longer flow from Practice Setup. They now flow from Staff Management (see Staff Management → Staff Scheduling below).
 
 ---
 
@@ -208,11 +208,11 @@ graph TD
 |----------|-------|
 | **Direction** | Practice Setup is upstream; Patient Scheduling is downstream |
 | **Pattern** | Open Host Service / Published Language |
-| **What flows** | Office hours and chair count, Provider availability and exceptions, Procedure type durations |
-| **Integration** | Patient Scheduling reads Practice Setup projections to validate booking constraints: office open, provider available, chair capacity, procedure duration. |
-| **Contract** | Patient Scheduling conforms to Practice Setup's event schema for all booking validations. |
+| **What flows** | Office hours and chair count, Procedure type durations |
+| **Integration** | Patient Scheduling reads Practice Setup projections to validate: office open (C1), chair capacity (C3), procedure type active (C5), procedure duration. Provider availability (C2) now comes from Staff Management via Staff Scheduling. |
+| **Contract** | Updated DM-1 (2026-03-06). Practice Setup provides office + procedure data only. |
 
-**Why OHS/PL**: Patient Scheduling is the heaviest consumer of Practice Setup data. All five booking constraints depend on Practice Setup configuration.
+**DM-1 update**: Provider availability no longer flows from Practice Setup to Patient Scheduling. Provider-related booking constraints (C2 provider available) are validated against Staff Scheduling's ResolvedSchedule, which now sources from Staff Management.
 
 ---
 
@@ -279,7 +279,7 @@ Boundaries that may shift as we learn more during future ceremonies:
 
 | Boundary | Current | May Shift To | Trigger |
 |----------|---------|-------------|---------|
-| Provider availability + exceptions | Practice Setup | Staff Scheduling | If implementation reveals need for richer scheduling (shift patterns, approval workflows) -- boundary reviewed and retained for MVP during Phase 2 ceremonies |
+| Provider availability + exceptions | ~~Practice Setup~~ → **Staff Management** | Staff Scheduling (reads from Staff Management) | **RESOLVED — DM-1 (2026-03-06)**: Provider IS A StaffMember. Clinical data now lives entirely in Staff Management. The watch-list shift has been made. |
 | Procedure type ↔ Billing codes | Practice Setup owns procedure types | Billing context may add fee schedules and insurance codes | Post-MVP when Billing context is discovered |
 | Office address | Practice aggregate has practice address; Office has no address | Office may need its own address | Multi-location practices with distinct addresses |
 | Module gating mechanism | Licensing projection read by each context directly | Dedicated cross-cutting service / middleware | If module checks become complex enough to warrant centralization |
