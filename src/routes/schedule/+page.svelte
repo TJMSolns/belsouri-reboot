@@ -3,7 +3,7 @@
   import { commands } from "$lib/bindings";
   import type {
     AppointmentDto, AppointmentWithNotesDto, CallListEntryDto,
-    ProviderScheduleEntry, OfficeDto, ProviderDto, StaffShiftDto, StaffMemberDto,
+    ProviderScheduleEntry, OfficeDto, StaffShiftDto, StaffMemberDto,
   } from "$lib/bindings";
   import { getErrorMessage } from "$lib/utils/api";
   import { formatDate } from "$lib/utils/date";
@@ -17,7 +17,7 @@
   // ── Data ──────────────────────────────────────────────────────────────────
 
   let offices = $state<OfficeDto[]>([]);
-  let allProviders = $state<ProviderDto[]>([]);
+  let allProviders = $state<StaffMemberDto[]>([]);
   let procedures = $state<{ id: string; name: string; default_duration_minutes: number; is_active: boolean; required_provider_type: string | null }[]>([]);
 
   // ── Grid view ─────────────────────────────────────────────────────────────
@@ -115,7 +115,7 @@
 
   let officeProviders = $derived(
     allProviders
-      .filter((p) => !p.archived && p.office_ids.includes(selectedOfficeId))
+      .filter((p) => !p.archived && p.roles.includes("Provider") && p.office_ids.includes(selectedOfficeId))
       .sort((a, b) => a.name.localeCompare(b.name)),
   );
 
@@ -140,14 +140,14 @@
     if (!proc?.required_provider_type) return bookRoster;
     const req = CAPABILITY_LEVELS[proc.required_provider_type] ?? 0;
     return bookRoster.filter((entry) => {
-      const prov = allProviders.find((p) => p.id === entry.provider_id);
-      return (CAPABILITY_LEVELS[prov?.provider_type ?? ""] ?? 0) >= req;
+      const prov = allProviders.find((p) => p.staff_member_id === entry.staff_member_id);
+      return (CAPABILITY_LEVELS[prov?.clinical_specialization ?? ""] ?? 0) >= req;
     });
   })());
 
   let availableSlots = $derived(
     (() => {
-      const entry = eligibleBookRoster.find((e) => e.provider_id === bookProviderId);
+      const entry = eligibleBookRoster.find((e) => e.staff_member_id === bookProviderId);
       if (!entry) return [];
       return generateTimeSlots(entry.start_time, entry.end_time);
     })(),
@@ -155,7 +155,7 @@
 
   let reschedAvailableSlots = $derived(
     (() => {
-      const entry = reschedRoster.find((e) => e.provider_id === reschedProviderId);
+      const entry = reschedRoster.find((e) => e.staff_member_id === reschedProviderId);
       if (!entry) return [];
       return generateTimeSlots(entry.start_time, entry.end_time);
     })(),
@@ -164,7 +164,7 @@
   let visibleProviders = $derived(
     showAllProviders
       ? officeProviders
-      : officeProviders.filter((p) => providerRoster.some((r) => r.provider_id === p.id)),
+      : officeProviders.filter((p) => providerRoster.some((r) => r.staff_member_id === p.staff_member_id)),
   );
 
   // ── Helpers ───────────────────────────────────────────────────────────────
@@ -479,7 +479,7 @@
 
   function onBookProviderChange(providerId: string) {
     bookProviderId = providerId;
-    const entry = bookRoster.find((e) => e.provider_id === providerId);
+    const entry = bookRoster.find((e) => e.staff_member_id === providerId);
     if (entry) {
       bookStartTime = generateTimeSlots(entry.start_time, entry.end_time)[0] ?? "";
     } else {
@@ -592,7 +592,7 @@
     showReschedule = true;
     showCancelConfirm = false;
     reschedOfficeId = appt.office_id;
-    reschedProviderId = appt.provider_id;
+    reschedProviderId = appt.staff_member_id;
     reschedDate = appt.start_time.slice(0, 10);
     reschedTime = appt.start_time.slice(11, 16);
     reschedError = "";
@@ -664,7 +664,7 @@
   // When procedure changes and the selected provider is no longer eligible, deselect them.
   $effect(() => {
     if (bookProviderId && eligibleBookRoster.length > 0) {
-      const stillEligible = eligibleBookRoster.some((e) => e.provider_id === bookProviderId);
+      const stillEligible = eligibleBookRoster.some((e) => e.staff_member_id === bookProviderId);
       if (!stillEligible) { bookProviderId = ""; bookStartTime = ""; }
     } else if (bookProviderId && eligibleBookRoster.length === 0 && bookProcedureId) {
       bookProviderId = ""; bookStartTime = "";
@@ -761,8 +761,8 @@
             {#each eligibleBookRoster as entry}
               <button
                 class="chip"
-                class:chip-selected={bookProviderId === entry.provider_id}
-                onclick={() => onBookProviderChange(entry.provider_id)}
+                class:chip-selected={bookProviderId === entry.staff_member_id}
+                onclick={() => onBookProviderChange(entry.staff_member_id)}
               >
                 <span class="chip-name">{entry.provider_name}</span>
                 <span class="chip-hours">{minsTo12h(parseHHMM(entry.start_time))}–{minsTo12h(parseHHMM(entry.end_time))}</span>
@@ -956,8 +956,8 @@
                 {#each reschedRoster as entry}
                   <button
                     class="chip"
-                    class:chip-selected={reschedProviderId === entry.provider_id}
-                    onclick={() => { reschedProviderId = entry.provider_id; reschedTime = generateTimeSlots(entry.start_time, entry.end_time)[0] ?? ""; }}
+                    class:chip-selected={reschedProviderId === entry.staff_member_id}
+                    onclick={() => { reschedProviderId = entry.staff_member_id; reschedTime = generateTimeSlots(entry.start_time, entry.end_time)[0] ?? ""; }}
                   >
                     <span class="chip-name">{entry.provider_name}</span>
                     <span class="chip-hours">{minsTo12h(parseHHMM(entry.start_time))}–{minsTo12h(parseHHMM(entry.end_time))}</span>
@@ -1391,7 +1391,7 @@
           <div class="grid-header">
             <div class="time-col-head" aria-hidden="true"></div>
             {#each visibleProviders as prov}
-              {@const rosterEntry = providerRoster.find((r) => r.provider_id === prov.id)}
+              {@const rosterEntry = providerRoster.find((r) => r.staff_member_id === prov.staff_member_id)}
               <div class="col-head" class:col-head-off={!rosterEntry}>
                 <div class="col-head-name">{prov.name}</div>
                 {#if rosterEntry}
@@ -1414,11 +1414,11 @@
 
             <!-- Provider columns -->
             {#each visibleProviders as prov}
-              {@const rosterEntry = providerRoster.find((r) => r.provider_id === prov.id)}
+              {@const rosterEntry = providerRoster.find((r) => r.staff_member_id === prov.staff_member_id)}
               {@const isWorking = !!rosterEntry}
               {@const provStart = rosterEntry ? parseHHMM(rosterEntry.start_time) : openMins}
               {@const provEnd   = rosterEntry ? parseHHMM(rosterEntry.end_time)   : openMins}
-              {@const appts = schedule.filter((a) => a.provider_id === prov.id)}
+              {@const appts = schedule.filter((a) => a.staff_member_id === prov.staff_member_id)}
 
               {#if isWorking}
                 <div
@@ -1427,8 +1427,8 @@
                   role="button"
                   tabindex="0"
                   aria-label="Book appointment with {prov.name}"
-                  onclick={(e) => onColumnClick(e, prov.id)}
-                  onkeydown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onColumnClick(e as unknown as MouseEvent, prov.id); } }}
+                  onclick={(e) => onColumnClick(e, prov.staff_member_id)}
+                  onkeydown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onColumnClick(e as unknown as MouseEvent, prov.staff_member_id); } }}
                 >
                   {#each timeTicks as tick}
                     <div class="h-line" style="top: {tick.top}px" aria-hidden="true"></div>

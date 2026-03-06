@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { commands, type StaffMemberDto, type ProviderDto, type AppointmentDto, type StaffShiftDto } from "$lib/bindings";
+  import { commands, type StaffMemberDto, type AppointmentDto, type StaffShiftDto } from "$lib/bindings";
   import { onMount } from "svelte";
   import { toast } from "$lib/stores/toast";
   import { confirm } from "$lib/stores/confirm";
@@ -47,7 +47,7 @@
 
   // ── Provider schedule section ─────────────────────────────────────────────
 
-  let providers = $state<ProviderDto[]>([]);
+  let providers = $state<StaffMemberDto[]>([]);
   let expandedProviderId = $state<string | null>(null);
   let providerWeekStart = $state(getMondayOfWeek(todayStr()));
   let providerSchedule = $state<AppointmentDto[]>([]);
@@ -689,25 +689,25 @@
       <h3 class="section-heading">Clinical Staff (Providers)</h3>
 
       <div class="providers-list">
-        {#each providers.filter((p) => !p.archived) as prov (prov.id)}
+        {#each providers.filter((p) => !p.archived) as prov (prov.staff_member_id)}
           <div class="provider-card">
             <div
               class="provider-row"
               role="button"
               tabindex="0"
-              aria-expanded={expandedProviderId === prov.id}
+              aria-expanded={expandedProviderId === prov.staff_member_id}
               aria-label="Expand {prov.name} schedule"
-              onclick={() => toggleProvider(prov.id)}
-              onkeydown={(e) => (e.key === "Enter" || e.key === " ") && toggleProvider(prov.id)}
+              onclick={() => toggleProvider(prov.staff_member_id)}
+              onkeydown={(e) => (e.key === "Enter" || e.key === " ") && toggleProvider(prov.staff_member_id)}
             >
               <div class="provider-info">
                 <span class="provider-name">{prov.name}</span>
-                <span class="provider-type-badge">{prov.provider_type}</span>
+                <span class="provider-type-badge">{prov.clinical_specialization ?? "—"}</span>
               </div>
-              <span class="chevron">{expandedProviderId === prov.id ? "▲" : "▼"}</span>
+              <span class="chevron">{expandedProviderId === prov.staff_member_id ? "▲" : "▼"}</span>
             </div>
 
-            {#if expandedProviderId === prov.id}
+            {#if expandedProviderId === prov.staff_member_id}
               <div class="provider-schedule-panel">
                 <!-- Week navigation -->
                 <div class="week-nav">
@@ -758,12 +758,12 @@
         <div class="archived-providers">
           <h4 class="archived-heading">Inactive Providers</h4>
           <div class="providers-list">
-            {#each providers.filter((p) => p.archived) as prov (prov.id)}
+            {#each providers.filter((p) => p.archived) as prov (prov.staff_member_id)}
               <div class="provider-card archived">
                 <div class="provider-row">
                   <div class="provider-info">
                     <span class="provider-name">{prov.name}</span>
-                    <span class="provider-type-badge">{prov.provider_type}</span>
+                    <span class="provider-type-badge">{prov.clinical_specialization ?? "—"}</span>
                     <span class="badge archived-badge">Archived</span>
                   </div>
                 </div>

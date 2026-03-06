@@ -142,110 +142,6 @@ async getOffice(officeId: string) : Promise<Result<OfficeDto, string>> {
     else return { status: "error", error: e  as any };
 }
 },
-async registerProvider(name: string, providerType: string) : Promise<Result<ProviderDto, string>> {
-    try {
-    return { status: "ok", data: await TAURI_INVOKE("register_provider", { name, providerType }) };
-} catch (e) {
-    if(e instanceof Error) throw e;
-    else return { status: "error", error: e  as any };
-}
-},
-async renameProvider(providerId: string, newName: string) : Promise<Result<ProviderDto, string>> {
-    try {
-    return { status: "ok", data: await TAURI_INVOKE("rename_provider", { providerId, newName }) };
-} catch (e) {
-    if(e instanceof Error) throw e;
-    else return { status: "error", error: e  as any };
-}
-},
-async changeProviderType(providerId: string, newProviderType: string) : Promise<Result<ProviderDto, string>> {
-    try {
-    return { status: "ok", data: await TAURI_INVOKE("change_provider_type", { providerId, newProviderType }) };
-} catch (e) {
-    if(e instanceof Error) throw e;
-    else return { status: "error", error: e  as any };
-}
-},
-async assignProviderToOffice(providerId: string, officeId: string) : Promise<Result<ProviderDto, string>> {
-    try {
-    return { status: "ok", data: await TAURI_INVOKE("assign_provider_to_office", { providerId, officeId }) };
-} catch (e) {
-    if(e instanceof Error) throw e;
-    else return { status: "error", error: e  as any };
-}
-},
-async removeProviderFromOffice(providerId: string, officeId: string) : Promise<Result<ProviderDto, string>> {
-    try {
-    return { status: "ok", data: await TAURI_INVOKE("remove_provider_from_office", { providerId, officeId }) };
-} catch (e) {
-    if(e instanceof Error) throw e;
-    else return { status: "error", error: e  as any };
-}
-},
-async setProviderAvailability(providerId: string, officeId: string, dayOfWeek: string, startTime: string, endTime: string) : Promise<Result<ProviderDto, string>> {
-    try {
-    return { status: "ok", data: await TAURI_INVOKE("set_provider_availability", { providerId, officeId, dayOfWeek, startTime, endTime }) };
-} catch (e) {
-    if(e instanceof Error) throw e;
-    else return { status: "error", error: e  as any };
-}
-},
-async clearProviderAvailability(providerId: string, officeId: string, dayOfWeek: string) : Promise<Result<ProviderDto, string>> {
-    try {
-    return { status: "ok", data: await TAURI_INVOKE("clear_provider_availability", { providerId, officeId, dayOfWeek }) };
-} catch (e) {
-    if(e instanceof Error) throw e;
-    else return { status: "error", error: e  as any };
-}
-},
-async setProviderException(providerId: string, startDate: string, endDate: string, reason: string | null) : Promise<Result<ProviderDto, string>> {
-    try {
-    return { status: "ok", data: await TAURI_INVOKE("set_provider_exception", { providerId, startDate, endDate, reason }) };
-} catch (e) {
-    if(e instanceof Error) throw e;
-    else return { status: "error", error: e  as any };
-}
-},
-async removeProviderException(providerId: string, startDate: string, endDate: string) : Promise<Result<ProviderDto, string>> {
-    try {
-    return { status: "ok", data: await TAURI_INVOKE("remove_provider_exception", { providerId, startDate, endDate }) };
-} catch (e) {
-    if(e instanceof Error) throw e;
-    else return { status: "error", error: e  as any };
-}
-},
-async archiveProvider(providerId: string) : Promise<Result<ProviderDto, string>> {
-    try {
-    return { status: "ok", data: await TAURI_INVOKE("archive_provider", { providerId }) };
-} catch (e) {
-    if(e instanceof Error) throw e;
-    else return { status: "error", error: e  as any };
-}
-},
-async unarchiveProvider(providerId: string) : Promise<Result<ProviderDto, string>> {
-    try {
-    return { status: "ok", data: await TAURI_INVOKE("unarchive_provider", { providerId }) };
-} catch (e) {
-    if(e instanceof Error) throw e;
-    else return { status: "error", error: e  as any };
-}
-},
-async listProviders() : Promise<Result<ProviderDto[], string>> {
-    try {
-    return { status: "ok", data: await TAURI_INVOKE("list_providers") };
-} catch (e) {
-    if(e instanceof Error) throw e;
-    else return { status: "error", error: e  as any };
-}
-},
-async getProvider(providerId: string) : Promise<Result<ProviderDto, string>> {
-    try {
-    return { status: "ok", data: await TAURI_INVOKE("get_provider", { providerId }) };
-} catch (e) {
-    if(e instanceof Error) throw e;
-    else return { status: "error", error: e  as any };
-}
-},
 async defineProcedureType(name: string, category: string, defaultDurationMinutes: number) : Promise<Result<ProcedureTypeDto, string>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("define_procedure_type", { name, category, defaultDurationMinutes }) };
@@ -488,14 +384,102 @@ async getStaffSetupStatus() : Promise<Result<StaffSetupStatusDto, string>> {
 }
 },
 /**
- * Query whether a provider is available at an office on a given date and time.
+ * Set the clinical specialization of a Provider-role staff member.
+ */
+async setProviderType(staffMemberId: string, clinicalSpecialization: string) : Promise<Result<StaffMemberDto, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("set_provider_type", { staffMemberId, clinicalSpecialization }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Assign a Provider-role staff member to an office.
+ */
+async assignProviderToOffice(staffMemberId: string, officeId: string) : Promise<Result<StaffMemberDto, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("assign_provider_to_office", { staffMemberId, officeId }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Remove a Provider-role staff member from an office (also clears their availability for that office).
+ */
+async removeProviderFromOffice(staffMemberId: string, officeId: string) : Promise<Result<StaffMemberDto, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("remove_provider_from_office", { staffMemberId, officeId }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Set a provider's availability window for a specific office and day.
+ */
+async setProviderAvailability(staffMemberId: string, officeId: string, dayOfWeek: string, startTime: string, endTime: string) : Promise<Result<StaffMemberDto, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("set_provider_availability", { staffMemberId, officeId, dayOfWeek, startTime, endTime }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Clear a provider's availability window for a specific office and day.
+ */
+async clearProviderAvailability(staffMemberId: string, officeId: string, dayOfWeek: string) : Promise<Result<StaffMemberDto, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("clear_provider_availability", { staffMemberId, officeId, dayOfWeek }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Set a provider availability exception (time-off block).
+ */
+async setProviderException(staffMemberId: string, startDate: string, endDate: string, reason: string | null) : Promise<Result<StaffMemberDto, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("set_provider_exception", { staffMemberId, startDate, endDate, reason }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Remove a provider availability exception.
+ */
+async removeProviderException(staffMemberId: string, startDate: string, endDate: string) : Promise<Result<StaffMemberDto, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("remove_provider_exception", { staffMemberId, startDate, endDate }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * List all active (non-archived) Provider-role staff members.
+ */
+async listProviders() : Promise<Result<StaffMemberDto[], string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("list_providers") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Query whether a provider (staff member with Provider role) is available at an office on a given date and time.
  * 
  * date: "YYYY-MM-DD", time: "HH:MM"
  * Returns {available, reason} where reason is null when available is true.
  */
-async queryProviderAvailability(providerId: string, officeId: string, date: string, time: string) : Promise<Result<ProviderAvailabilityResult, string>> {
+async queryProviderAvailability(staffMemberId: string, officeId: string, date: string, time: string) : Promise<Result<ProviderAvailabilityResult, string>> {
     try {
-    return { status: "ok", data: await TAURI_INVOKE("query_provider_availability", { providerId, officeId, date, time }) };
+    return { status: "ok", data: await TAURI_INVOKE("query_provider_availability", { staffMemberId, officeId, date, time }) };
 } catch (e) {
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
@@ -515,17 +499,17 @@ async getOfficeProviderSchedule(officeId: string, date: string) : Promise<Result
     else return { status: "error", error: e  as any };
 }
 },
-async bookAppointment(officeId: string, patientId: string, procedureTypeId: string, providerId: string, startTime: string, durationMinutes: number | null, bookedBy: string) : Promise<Result<BookAppointmentResult, string>> {
+async bookAppointment(officeId: string, patientId: string, procedureTypeId: string, staffMemberId: string, startTime: string, durationMinutes: number | null, bookedBy: string) : Promise<Result<BookAppointmentResult, string>> {
     try {
-    return { status: "ok", data: await TAURI_INVOKE("book_appointment", { officeId, patientId, procedureTypeId, providerId, startTime, durationMinutes, bookedBy }) };
+    return { status: "ok", data: await TAURI_INVOKE("book_appointment", { officeId, patientId, procedureTypeId, staffMemberId, startTime, durationMinutes, bookedBy }) };
 } catch (e) {
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
 }
 },
-async rescheduleAppointment(appointmentId: string, newOfficeId: string, newProviderId: string, newStartTime: string, newDurationMinutes: number | null, rescheduledBy: string) : Promise<Result<RescheduleAppointmentResult, string>> {
+async rescheduleAppointment(appointmentId: string, newOfficeId: string, newStaffMemberId: string, newStartTime: string, newDurationMinutes: number | null, rescheduledBy: string) : Promise<Result<RescheduleAppointmentResult, string>> {
     try {
-    return { status: "ok", data: await TAURI_INVOKE("reschedule_appointment", { appointmentId, newOfficeId, newProviderId, newStartTime, newDurationMinutes, rescheduledBy }) };
+    return { status: "ok", data: await TAURI_INVOKE("reschedule_appointment", { appointmentId, newOfficeId, newStaffMemberId, newStartTime, newDurationMinutes, rescheduledBy }) };
 } catch (e) {
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
@@ -579,9 +563,9 @@ async getAppointment(appointmentId: string) : Promise<Result<AppointmentWithNote
     else return { status: "error", error: e  as any };
 }
 },
-async getProviderSchedule(providerId: string, startDate: string, endDate: string) : Promise<Result<AppointmentDto[], string>> {
+async getProviderSchedule(staffMemberId: string, startDate: string, endDate: string) : Promise<Result<AppointmentDto[], string>> {
     try {
-    return { status: "ok", data: await TAURI_INVOKE("get_provider_schedule", { providerId, startDate, endDate }) };
+    return { status: "ok", data: await TAURI_INVOKE("get_provider_schedule", { staffMemberId, startDate, endDate }) };
 } catch (e) {
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
@@ -647,7 +631,7 @@ async archiveDemoData() : Promise<Result<ArchiveSummaryDto, string>> {
 
 /** user-defined types **/
 
-export type AppointmentDto = { appointment_id: string; office_id: string; patient_id: string; patient_name: string; patient_phone: string | null; procedure_type_id: string; procedure_name: string; procedure_category: string; provider_id: string; provider_name: string; start_time: string; end_time: string; duration_minutes: number; status: string; rescheduled_to_id: string | null; rescheduled_from_id: string | null; booked_by: string }
+export type AppointmentDto = { appointment_id: string; office_id: string; patient_id: string; patient_name: string; patient_phone: string | null; procedure_type_id: string; procedure_name: string; procedure_category: string; staff_member_id: string; provider_name: string; start_time: string; end_time: string; duration_minutes: number; status: string; rescheduled_to_id: string | null; rescheduled_from_id: string | null; booked_by: string }
 export type AppointmentNoteDto = { note_id: string; appointment_id: string; text: string; recorded_by: string; recorded_at: string }
 export type AppointmentWithNotesDto = { appointment: AppointmentDto; notes: AppointmentNoteDto[] }
 export type ArchiveSummaryDto = { patients_archived: number; providers_archived: number; staff_archived: number }
@@ -676,8 +660,7 @@ export type PlanShiftResult = { shift_id: string }
 export type PracticeDto = { name: string; phone: string | null; email: string | null; website: string | null; address_line_1: string | null; address_line_2: string | null; city_town: string | null; subdivision: string | null; country: string | null }
 export type ProcedureTypeDto = { id: string; name: string; category: string; default_duration_minutes: number; is_active: boolean; required_provider_type: string | null }
 export type ProviderAvailabilityResult = { available: boolean; reason: string | null }
-export type ProviderDto = { id: string; name: string; provider_type: string; office_ids: string[]; availability: AvailabilityWindowDto[]; exceptions: AvailabilityExceptionDto[]; archived: boolean }
-export type ProviderScheduleEntry = { provider_id: string; provider_name: string; start_time: string; end_time: string }
+export type ProviderScheduleEntry = { staff_member_id: string; provider_name: string; start_time: string; end_time: string }
 /**
  * Returned from register_patient. Includes the new patient record and
  * an optional soft duplicate warning (does NOT block registration).
@@ -689,7 +672,7 @@ export type StaffMemberDto = { staff_member_id: string; name: string; phone: str
 /**
  * True if the staff member has a PIN set (PIN hash itself is never exposed).
  */
-has_pin: boolean; roles: string[]; archived: boolean }
+has_pin: boolean; roles: string[]; archived: boolean; clinical_specialization: string | null; office_ids: string[]; availability: AvailabilityWindowDto[]; exceptions: AvailabilityExceptionDto[] }
 /**
  * Returns whether the Staff Management setup step is complete.
  * Complete = at least one active PracticeManager has a PIN set.

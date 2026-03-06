@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { commands } from "$lib/bindings";
-  import type { PracticeDto, OfficeDto, ProviderDto, ProcedureTypeDto } from "$lib/bindings";
+  import type { PracticeDto, OfficeDto, StaffMemberDto, ProcedureTypeDto } from "$lib/bindings";
   import PracticeTab from "$lib/components/setup/PracticeTab.svelte";
   import OfficesTab from "$lib/components/setup/OfficesTab.svelte";
   import ProvidersTab from "$lib/components/setup/ProvidersTab.svelte";
@@ -23,7 +23,7 @@
   // ── Checklist data ──────────────────────────────────────────────
   let practice = $state<PracticeDto | null>(null);
   let offices = $state<OfficeDto[]>([]);
-  let providers = $state<ProviderDto[]>([]);
+  let providers = $state<StaffMemberDto[]>([]);
   let procedureTypes = $state<ProcedureTypeDto[]>([]);
 
   async function reloadSetupData() {
@@ -51,7 +51,13 @@
 
   let practiceComplete = $derived(!!practice?.name);
   let officesComplete = $derived(offices.filter((o) => !o.archived).length > 0);
-  let providersComplete = $derived(providers.filter((p) => !p.archived).length > 0);
+  let providersComplete = $derived(providers.filter((p) =>
+    !p.archived &&
+    p.roles.includes("Provider") &&
+    p.clinical_specialization != null &&
+    p.office_ids.length > 0 &&
+    p.availability.length > 0
+  ).length > 0);
   let proceduresComplete = $derived(procedureTypes.filter((pt) => pt.is_active).length > 0);
 </script>
 
