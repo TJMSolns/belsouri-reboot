@@ -40,7 +40,7 @@
       stroke-linejoin="round"
       aria-hidden="true"
     >
-      <polyline points="20 6 9 11 4 16" />
+      <polyline points="20 6 9 17 4 12" />
     </svg>
     Practice setup complete
   </div>
@@ -88,7 +88,7 @@
                 stroke-linecap="round"
                 stroke-linejoin="round"
               >
-                <polyline points="20 6 9 11 4 16" />
+                <polyline points="20 6 9 17 4 12" />
               </svg>
             {:else if i === currentStepIndex}
               <!-- Arrow indicator for current step -->

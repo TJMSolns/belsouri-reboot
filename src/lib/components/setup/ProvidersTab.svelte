@@ -76,21 +76,26 @@
   async function rename(provider: ProviderDto, val: string) {
     if (!val.trim() || val.trim() === provider.name) return;
     const r = await commands.renameProvider(provider.id, val.trim());
-    if (r.status === "ok") providers = providers.map((p) => p.id === provider.id ? r.data : p);
-    else actionError = { ...actionError, [provider.id]: r.error };
+    if (r.status === "ok") {
+      providers = providers.map((p) => p.id === provider.id ? r.data : p);
+      toast.success(`${val.trim()} (name updated).`);
+    } else { actionError = { ...actionError, [provider.id]: r.error }; }
   }
 
   async function changeType(provider: ProviderDto, type: string) {
     if (type === provider.provider_type) return;
     const r = await commands.changeProviderType(provider.id, type);
-    if (r.status === "ok") providers = providers.map((p) => p.id === provider.id ? r.data : p);
-    else actionError = { ...actionError, [provider.id]: r.error };
+    if (r.status === "ok") {
+      providers = providers.map((p) => p.id === provider.id ? r.data : p);
+      toast.success(`${provider.name} updated to ${type}.`);
+    } else { actionError = { ...actionError, [provider.id]: r.error }; }
   }
 
   async function assignOffice(provider: ProviderDto, officeId: string) {
     const r = await commands.assignProviderToOffice(provider.id, officeId);
     if (r.status === "ok") {
       providers = providers.map((p) => p.id === provider.id ? r.data : p);
+      toast.success(`${provider.name} assigned to ${officeName(officeId)}.`);
       // Seed availability inputs for new office
       const existing = availInputs[provider.id] ?? {};
       const byDay: Record<string, { start: string; end: string }> = {};
@@ -164,11 +169,11 @@
   async function addException(pid: string) {
     const f = excForm[pid];
     if (!f?.start || !f?.end) { actionError = { ...actionError, [pid]: "Exception start and end dates are required." }; return; }
+    const prov = providers.find((p) => p.id === pid);
     const r = await commands.setProviderException(pid, f.start, f.end, f.reason || null);
     if (r.status === "ok") {
       providers = providers.map((p) => p.id === pid ? r.data : p);
-      const prov = providers.find((p) => p.id === pid);
-      toast.success(`Exception added for ${prov?.name ?? "provider"}.`);
+      toast.success(`Exception added for ${prov!.name}: ${formatDate(f.start)} → ${formatDate(f.end)}.`);
       excForm = { ...excForm, [pid]: { start: "", end: "", reason: "" } };
     } else { actionError = { ...actionError, [pid]: r.error }; }
   }
@@ -178,16 +183,17 @@
     const r = await commands.removeProviderException(pid, start, end);
     if (r.status === "ok") {
       providers = providers.map((p) => p.id === pid ? r.data : p);
-      toast.success(`Exception removed for ${prov?.name ?? "provider"}.`);
+      toast.success(`Exception removed for ${prov!.name}: ${formatDate(start)} → ${formatDate(end)}.`);
     } else { actionError = { ...actionError, [pid]: r.error }; }
   }
 
   async function toggleArchive(provider: ProviderDto) {
     const action = provider.archived ? "unarchive" : "archive";
+    const capitalisedAction = action.charAt(0).toUpperCase() + action.slice(1);
     const ok = await confirm({
-      title: `${action.charAt(0).toUpperCase() + action.slice(1)} provider`,
-      message: `${action.charAt(0).toUpperCase() + action.slice(1)} ${provider.name}?`,
-      confirmLabel: action.charAt(0).toUpperCase() + action.slice(1),
+      title: `${capitalisedAction} ${provider.name}`,
+      message: `${capitalisedAction} ${provider.name}?`,
+      confirmLabel: capitalisedAction,
       destructive: !provider.archived,
     });
     if (!ok) return;
@@ -208,7 +214,7 @@
 <div>
   <div class="section-header">
     <h2>Providers</h2>
-    <button class="btn-primary" onclick={() => (showRegister = !showRegister)}>
+    <button class="btn-primary" onclick={() => { showRegister = !showRegister; if (!showRegister) { newName = ""; newType = "Dentist"; registerError = null; } }}>
       {showRegister ? "Cancel" : "+ Register Provider"}
     </button>
   </div>
@@ -220,7 +226,7 @@
       {#if registerError}<p class="error">{registerError}</p>{/if}
       <div class="row">
         <div class="field">
-          <label for="new-provider-name">Name</label>
+          <label for="new-provider-name">Name <span class="required" aria-hidden="true">*</span></label>
           <input id="new-provider-name" bind:value={newName} placeholder="Dr. Brown" />
         </div>
         <div class="field" style="max-width:150px">
@@ -377,14 +383,19 @@
               </div>
             {/if}
             <form class="exc-form" onsubmit={(e) => { e.preventDefault(); addException(provider.id); }}>
-              <label for="exc-start-{provider.id}" class="sr-only">Exception start date</label>
-              <input id="exc-start-{provider.id}" type="date" bind:value={excForm[provider.id].start} />
-              <span aria-hidden="true">→</span>
-              <label for="exc-end-{provider.id}" class="sr-only">Exception end date</label>
-              <input id="exc-end-{provider.id}" type="date" bind:value={excForm[provider.id].end} />
-              <label for="exc-reason-{provider.id}" class="sr-only">Reason (optional)</label>
-              <input id="exc-reason-{provider.id}" placeholder="e.g. Holiday" bind:value={excForm[provider.id].reason} style="flex:1" />
-              <button type="submit" class="btn-sm">Add</button>
+              <div class="exc-field">
+                <label for="exc-start-{provider.id}" class="exc-label">From</label>
+                <input id="exc-start-{provider.id}" type="date" bind:value={excForm[provider.id].start} />
+              </div>
+              <div class="exc-field">
+                <label for="exc-end-{provider.id}" class="exc-label">To</label>
+                <input id="exc-end-{provider.id}" type="date" bind:value={excForm[provider.id].end} />
+              </div>
+              <div class="exc-field exc-reason">
+                <label for="exc-reason-{provider.id}" class="exc-label">Reason</label>
+                <input id="exc-reason-{provider.id}" placeholder="e.g. Holiday" bind:value={excForm[provider.id].reason} />
+              </div>
+              <button type="submit" class="btn-sm exc-submit">Add</button>
             </form>
           </div>
         {/if}
@@ -461,7 +472,7 @@
     padding: 3px var(--space-3); background: var(--color-provider-type-lt); border-radius: var(--radius-full);
     font-size: var(--text-xs); color: var(--color-provider-type); font-weight: 600; font-family: var(--font-body);
   }
-  .chip-remove { background: none; border: none; cursor: pointer; color: var(--color-provider-type); font-size: var(--text-sm); padding: 0; line-height: 1; }
+  .chip-remove { background: none; border: none; cursor: pointer; color: var(--color-provider-type); font-size: var(--text-sm); padding: 4px 6px; line-height: 1; min-width: 28px; min-height: 28px; display: inline-flex; align-items: center; justify-content: center; }
   .chip-add { background: white; border: 1px dashed var(--pearl-mist-dk); color: var(--slate-fog); cursor: pointer; font-family: var(--font-body); }
   .chip-add:hover { border-color: var(--abyss-navy); color: var(--abyss-navy); }
 
@@ -477,12 +488,17 @@
 
   .exception-list { display: flex; flex-direction: column; gap: var(--space-2); margin-bottom: var(--space-2); }
   .exception-item { display: flex; align-items: center; gap: var(--space-2); font-size: var(--text-sm); font-family: var(--font-body); color: var(--abyss-navy); }
-  .exc-form { display: flex; gap: var(--space-2); align-items: center; flex-wrap: wrap; }
+  .exc-form { display: flex; gap: var(--space-2); align-items: flex-end; flex-wrap: wrap; }
+  .exc-field { display: flex; flex-direction: column; gap: 2px; }
+  .exc-field.exc-reason { flex: 1; }
+  .exc-label { font-size: var(--text-xs); font-weight: 600; color: var(--slate-fog); font-family: var(--font-body); }
   .exc-form input[type="date"] { padding: var(--space-1) var(--space-2); border: 1px solid var(--pearl-mist-dk); border-radius: var(--radius-sm); font-size: var(--text-sm); font-family: var(--font-body); }
-  .exc-form input:not([type="date"]) { padding: var(--space-1) var(--space-2); border: 1px solid var(--pearl-mist-dk); border-radius: var(--radius-sm); font-size: var(--text-sm); font-family: var(--font-body); }
+  .exc-form input:not([type="date"]) { padding: var(--space-1) var(--space-2); border: 1px solid var(--pearl-mist-dk); border-radius: var(--radius-sm); font-size: var(--text-sm); font-family: var(--font-body); width: 100%; }
+  .exc-submit { align-self: flex-end; }
 
+  .required { color: var(--healthy-coral-dk); margin-left: 2px; }
   .btn-primary {
-    display: inline-flex; align-items: center; min-height: 36px; padding: 0 var(--space-4);
+    display: inline-flex; align-items: center; min-height: 44px; padding: 0 var(--space-4);
     background: var(--caribbean-teal); color: white; border: none;
     border-radius: var(--radius-md); font-family: var(--font-heading); font-size: var(--text-sm);
     font-weight: 600; cursor: pointer; transition: background var(--transition-fast);
@@ -490,7 +506,7 @@
   .btn-primary:hover:not(:disabled) { background: var(--caribbean-teal-dk); }
   .btn-primary:disabled { opacity: 0.45; cursor: not-allowed; }
   .btn-sm {
-    display: inline-flex; align-items: center; min-height: 28px; padding: 0 var(--space-3);
+    display: inline-flex; align-items: center; min-height: 44px; padding: 0 var(--space-3);
     background: var(--caribbean-teal); color: white; border: none;
     border-radius: var(--radius-sm); font-size: var(--text-xs); font-family: var(--font-body); font-weight: 600; cursor: pointer;
     transition: background var(--transition-fast);
@@ -498,7 +514,7 @@
   .btn-sm.btn-ghost { background: var(--pearl-mist); color: var(--slate-fog); border: 1px solid var(--pearl-mist-dk); }
   .btn-sm.btn-ghost:hover { background: var(--pearl-mist-dk); color: var(--abyss-navy); }
   .btn-danger-sm {
-    display: inline-flex; align-items: center; min-height: 32px; padding: 0 var(--space-3);
+    display: inline-flex; align-items: center; min-height: 44px; padding: 0 var(--space-3);
     background: white; color: var(--healthy-coral-dk);
     border: 1px solid var(--healthy-coral); border-radius: var(--radius-md);
     font-size: var(--text-xs); font-family: var(--font-body); font-weight: 600; cursor: pointer;

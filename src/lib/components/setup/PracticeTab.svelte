@@ -58,7 +58,7 @@
     saving = false;
     if (r.status === "ok") {
       populate(r.data);
-      toast.success("Practice details saved.");
+      toast.success(`Practice details saved for "${name.trim()}".`);
     } else {
       error = r.error;
     }
@@ -95,7 +95,7 @@
 
   <div class="field">
     <label for="addr1">Address Line 1</label>
-    <input id="addr1" bind:value={address_line_1} placeholder="123 Main Street" />
+    <input id="addr1" bind:value={address_line_1} placeholder="e.g. 12 Harbour Street" />
   </div>
 
   <div class="field">
