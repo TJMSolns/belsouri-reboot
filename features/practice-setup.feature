@@ -7,12 +7,13 @@
 # Covers:
 #   Practice identity (4 rules)
 #   Office lifecycle (6 rules)
-#   Provider lifecycle and availability (8 rules)
+#   Provider lifecycle — RETIRED (DM-1, 2026-03-06) — see features/staff-management.feature
 #   Procedure Type lifecycle (5 rules)
 #   Setup checklist (4 rules)
 #
-# Context: Practice Setup is the foundational bounded context.
-# All scheduling depends on offices, providers, and procedure types being configured.
+# Context: Practice Setup owns offices, procedure types, and practice identity.
+# Provider/clinical data moved to Staff Management context (DM-1, 2026-03-06).
+# All scheduling depends on offices, providers (in Staff Management), and procedure types.
 
 Feature: Practice Setup
 
@@ -232,201 +233,18 @@ Feature: Practice Setup
     Then the office setup step is "incomplete"
 
   # ─────────────────────────────────────────────────────────────
-  # PROVIDER LIFECYCLE
+  # PROVIDER LIFECYCLE — RETIRED (DM-1, 2026-03-06)
   # ─────────────────────────────────────────────────────────────
-
-  # Rule PR1: Provider registration
-
-  Scenario: Registering a provider with name and type
-    When the Practice Manager registers provider "Dr. Smith" as "Dentist"
-    Then a ProviderRegistered event is recorded with name "Dr. Smith" and provider_type "Dentist"
-
-  Scenario: Registering a provider with an empty name is rejected
-    When the Practice Manager registers provider "" as "Dentist"
-    Then no ProviderRegistered event is recorded
-    And an error is shown: "Name is required"
-
-  Scenario: Registering a provider with an invalid type is rejected
-    When the Practice Manager registers provider "Dr. Smith" as "Receptionist"
-    Then no ProviderRegistered event is recorded
-    And an error is shown: "Provider type must be Dentist, Hygienist, or Specialist"
-
-  # Rule PR2: Assignment required before setting availability
-
-  Scenario: Assigning a provider to an office
-    Given an active provider "Dr. Smith" exists
-    And an active office "Kingston" exists
-    When the Practice Manager assigns provider "Dr. Smith" to office "Kingston"
-    Then a ProviderAssignedToOffice event is recorded
-
-  Scenario: Setting availability before assignment is rejected
-    Given an active provider "Dr. Smith" exists
-    And an active office "Kingston" exists
-    And provider "Dr. Smith" is not assigned to office "Kingston"
-    When the Practice Manager sets Monday 08:00-17:00 availability for "Dr. Smith" at "Kingston"
-    Then no ProviderAvailabilitySet event is recorded
-    And an error is shown: "Provider must be assigned to this office first"
-
-  Scenario: Setting availability after assignment succeeds
-    Given an active provider "Dr. Smith" is assigned to office "Kingston"
-    When the Practice Manager sets Monday 08:00-17:00 availability for "Dr. Smith" at "Kingston"
-    Then a ProviderAvailabilitySet event is recorded with office "Kingston", day Monday, start 08:00, end 17:00
-
-  Scenario: Assigning a provider already assigned to that office is rejected
-    Given provider "Dr. Smith" is already assigned to office "Kingston"
-    When the Practice Manager assigns provider "Dr. Smith" to office "Kingston"
-    Then no ProviderAssignedToOffice event is recorded
-    And an error is shown: "Provider is already assigned to this office"
-
-  # Rule PR3: Removing from office clears availability
-
-  Scenario: Removing provider from office clears all availability at that office
-    Given provider "Dr. Smith" is assigned to office "Kingston"
-    And provider "Dr. Smith" has availability Mon, Wed, Fri at office "Kingston"
-    When the Practice Manager removes provider "Dr. Smith" from office "Kingston"
-    Then a ProviderRemovedFromOffice event is recorded
-    And 3 ProviderAvailabilityCleared events are recorded for Monday, Wednesday, Friday at "Kingston"
-
-  Scenario: Removing provider from office with no availability only emits removal event
-    Given provider "Dr. Smith" is assigned to office "Kingston"
-    And provider "Dr. Smith" has no availability set at office "Kingston"
-    When the Practice Manager removes provider "Dr. Smith" from office "Kingston"
-    Then a ProviderRemovedFromOffice event is recorded
-    And no ProviderAvailabilityCleared events are recorded
-
-  Scenario: Removing provider from office they are not assigned to is rejected
-    Given provider "Dr. Smith" is not assigned to office "Montego Bay"
-    When the Practice Manager removes provider "Dr. Smith" from office "Montego Bay"
-    Then no ProviderRemovedFromOffice event is recorded
-    And an error is shown: "Provider is not assigned to this office"
-
-  # Rule PR4: No cross-office availability overlap on same day
-
-  Scenario: Setting non-overlapping availability at two offices on the same day
-    Given provider "Dr. Smith" is assigned to offices "Kingston" and "Montego Bay"
-    And provider "Dr. Smith" has availability Monday 08:00-12:00 at "Kingston"
-    When the Practice Manager sets Monday 13:00-17:00 availability for "Dr. Smith" at "Montego Bay"
-    Then a ProviderAvailabilitySet event is recorded for "Montego Bay" Monday 13:00-17:00
-
-  Scenario: Setting overlapping availability at a second office on the same day is rejected
-    Given provider "Dr. Smith" is assigned to offices "Kingston" and "Montego Bay"
-    And provider "Dr. Smith" has availability Monday 08:00-14:00 at "Kingston"
-    When the Practice Manager sets Monday 12:00-17:00 availability for "Dr. Smith" at "Montego Bay"
-    Then no ProviderAvailabilitySet event is recorded
-    And an error is shown: "Provider has overlapping availability at Kingston on Monday (08:00-14:00)"
-
-  Scenario: Adjacent availability windows at two offices are allowed
-    Given provider "Dr. Smith" is assigned to offices "Kingston" and "Montego Bay"
-    And provider "Dr. Smith" has availability Monday 08:00-12:00 at "Kingston"
-    When the Practice Manager sets Monday 12:00-17:00 availability for "Dr. Smith" at "Montego Bay"
-    Then a ProviderAvailabilitySet event is recorded for "Montego Bay" Monday 12:00-17:00
-
-  # Rule PR5: Availability outside office hours warns but proceeds
-
-  Scenario: Setting provider availability within office hours has no warning
-    Given an active office "Kingston" has Monday hours 08:00-17:00
-    And provider "Dr. Smith" is assigned to office "Kingston"
-    When the Practice Manager sets Monday 08:00-17:00 availability for "Dr. Smith" at "Kingston"
-    Then a ProviderAvailabilitySet event is recorded
-    And no warning is shown
-
-  Scenario: Setting provider availability starting before office opens warns but proceeds
-    Given an active office "Kingston" has Monday hours 08:00-17:00
-    And provider "Dr. Smith" is assigned to office "Kingston"
-    When the Practice Manager sets Monday 07:00-17:00 availability for "Dr. Smith" at "Kingston"
-    Then a ProviderAvailabilitySet event is recorded
-    And a warning is shown: "Availability starts before office opens at 08:00"
-
-  Scenario: Setting availability on a day the office is closed warns but proceeds
-    Given an active office "Kingston" has no hours configured for Sunday
-    And provider "Dr. Smith" is assigned to office "Kingston"
-    When the Practice Manager sets Sunday 10:00-14:00 availability for "Dr. Smith" at "Kingston"
-    Then a ProviderAvailabilitySet event is recorded
-    And a warning is shown: "Office is closed on Sunday"
-
-  # Rule PR6: Exceptions are provider-wide and override availability
-
-  Scenario: Setting a provider exception blocks them at all offices for the date range
-    Given provider "Dr. Smith" is assigned to offices "Kingston" and "Montego Bay"
-    When the Practice Manager sets an exception for "Dr. Smith" from 2026-12-20 to 2026-12-31 with reason "Holiday vacation"
-    Then a ProviderExceptionSet event is recorded with start 2026-12-20, end 2026-12-31, reason "Holiday vacation"
-    And "Dr. Smith" is unavailable at both "Kingston" and "Montego Bay" from 2026-12-20 to 2026-12-31
-
-  Scenario: Setting a single-day exception
-    When the Practice Manager sets an exception for "Dr. Smith" from 2026-11-05 to 2026-11-05
-    Then a ProviderExceptionSet event is recorded with start 2026-11-05 and end 2026-11-05
-
-  Scenario: Setting an exception where end date is before start date is rejected
-    When the Practice Manager sets an exception for "Dr. Smith" from 2026-12-31 to 2026-12-20
-    Then no ProviderExceptionSet event is recorded
-    And an error is shown: "End date must be on or after start date"
-
-  Scenario: Setting an exception over dates with existing appointments warns but proceeds
-    Given provider "Dr. Smith" has 3 appointments booked between 2026-12-20 and 2026-12-31
-    When the Practice Manager sets an exception for "Dr. Smith" from 2026-12-20 to 2026-12-31
-    Then a ProviderExceptionSet event is recorded
-    And a warning is shown: "3 appointments exist in this date range — they will not be cancelled"
-
-  Scenario: Removing a provider exception restores availability
-    Given provider "Dr. Smith" has an exception from 2026-12-20 to 2026-12-31
-    When the Practice Manager removes the exception from 2026-12-20 to 2026-12-31 for "Dr. Smith"
-    Then a ProviderExceptionRemoved event is recorded
-    And "Dr. Smith" is available again per their weekly availability
-
-  Scenario: Removing an exception that does not exist is rejected
-    Given provider "Dr. Smith" has no exception for 2026-12-20 to 2026-12-31
-    When the Practice Manager attempts to remove exception from 2026-12-20 to 2026-12-31 for "Dr. Smith"
-    Then no ProviderExceptionRemoved event is recorded
-    And an error is shown: "No exception found for that date range"
-
-  # Rule PR7: Archive and unarchive
-
-  Scenario: Archiving an active provider
-    Given an active provider "Dr. Smith" exists
-    When the Practice Manager archives provider "Dr. Smith"
-    Then a ProviderArchived event is recorded
-    And provider "Dr. Smith" does not appear in the active provider list
-
-  Scenario: Archiving an already-archived provider is rejected
-    Given provider "Dr. Smith" is already archived
-    When the Practice Manager attempts to archive provider "Dr. Smith"
-    Then no ProviderArchived event is recorded
-    And an error is shown: "Provider is already archived"
-
-  Scenario: Unarchiving an archived provider
-    Given provider "Dr. Smith" is archived
-    When the Practice Manager unarchives provider "Dr. Smith"
-    Then a ProviderUnarchived event is recorded
-    And provider "Dr. Smith" appears in the active provider list
-
-  Scenario: Unarchiving an active provider is rejected
-    Given an active provider "Dr. Smith" exists
-    When the Practice Manager attempts to unarchive provider "Dr. Smith"
-    Then no ProviderUnarchived event is recorded
-    And an error is shown: "Provider is not archived"
-
-  Scenario: Archived provider appointments remain visible in history
-    Given provider "Dr. Smith" is archived
-    And historical appointments for "Dr. Smith" exist
-    When the Practice Manager views historical appointments
-    Then the appointments for "Dr. Smith" are visible
-
-  # Rule PR8: Setup checklist — provider step completion
-
-  Scenario: Provider step is incomplete when provider is registered but not assigned
-    Given provider "Dr. Smith" is registered but not assigned to any office
-    When the setup checklist is evaluated
-    Then the provider setup step is "incomplete"
-
-  Scenario: Provider step is incomplete when provider is assigned but has no availability
-    Given provider "Dr. Smith" is assigned to office "Kingston" with no availability set
-    When the setup checklist is evaluated
-    Then the provider setup step is "incomplete"
-
-  Scenario: Provider step is complete when provider is assigned and has availability for one day
-    Given provider "Dr. Smith" is assigned to office "Kingston" with Monday availability set
-    When the setup checklist is evaluated
-    Then the provider setup step is "complete"
+  #
+  # Provider IS A StaffMember. Clinical configuration (provider type, office
+  # assignments, availability, exceptions) has moved to the Staff Management
+  # context. See features/staff-management.feature — CLINICAL CONFIGURATION section.
+  #
+  # The setup checklist Provider step now reads from Staff Management:
+  # active StaffMember + Provider role + ClinicalSpecialization set + ≥1 office + ≥1 availability day.
+  #
+  # Rules PR1–PR8 are retired. No scenarios listed here.
+  # ─────────────────────────────────────────────────────────────
 
   # ─────────────────────────────────────────────────────────────
   # PROCEDURE TYPE LIFECYCLE
@@ -585,9 +403,9 @@ Feature: Practice Setup
 
   # Rule SC3: Checklist reflects current state including reversals
 
-  Scenario: Provider step reverts to incomplete when only active provider is archived
-    Given the provider setup step is "complete" because one provider satisfies all requirements
-    When the Practice Manager archives that provider
+  Scenario: Provider step reverts to incomplete when only qualifying staff member is archived
+    Given the provider setup step is "complete" because one StaffMember with Provider role satisfies all requirements
+    When the Practice Manager archives that staff member
     Then the provider setup step is "incomplete"
 
   Scenario: Office step reverts to incomplete when only qualifying office is archived

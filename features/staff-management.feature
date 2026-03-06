@@ -4,6 +4,8 @@
 # Date: 2026-03-03
 # All assumptions (SM-1 through SM-5, SM3e, SM4d, SM9e, SM9f, SM11d) confirmed by Tony 2026-03-04.
 # Phase 2.5 governance: PASS (2026-03-04).
+# DM-1 amendment (2026-03-06): Clinical configuration section added (SM-C1 through SM-C8).
+# Provider lifecycle moved from Practice Setup to Staff Management.
 #
 # Covers:
 #   First-run bootstrap (Rule SM1)
@@ -311,13 +313,6 @@ Feature: Staff Management
     Then no StaffMemberArchived event is recorded
     And an error is shown: "Staff member is already archived"
 
-  Scenario: Archiving a staff member with Provider role does not archive the linked Practice Setup Provider
-    Given an active staff member "Dr. Brown" holds the "Provider" role
-    And a Practice Setup Provider exists referencing "Dr. Brown"
-    When the Practice Manager archives "Dr. Brown"
-    Then a StaffMemberArchived event is recorded for "Dr. Brown"
-    And the Practice Setup Provider linked to "Dr. Brown" remains active
-
   Scenario: Archived staff member historical attributions are preserved
     Given staff member "Maria" has been archived
     And historical records show "Maria" as the actor on past domain changes
@@ -447,6 +442,176 @@ Feature: Staff Management
     When the Practice Manager removes role "PracticeManager" from "Dr. Spence"
     And the setup checklist is evaluated
     Then the staff management setup step is "incomplete"
+
+  # ─────────────────────────────────────────────────────────────
+  # CLINICAL CONFIGURATION (DM-1, 2026-03-06)
+  # Provider IS A StaffMember — clinical config lives on StaffMember aggregate
+  # Rules SM-C1 through SM-C8 from dm1-staff-provider-merge-examples.md
+  # ─────────────────────────────────────────────────────────────
+
+  # Rule SM-C1: Provider role is required before clinical configuration commands are accepted
+
+  Scenario: Setting ClinicalSpecialization is rejected when staff member does not hold Provider role
+    Given an active staff member "Maria Brown" holds only the "Staff" role
+    When the Practice Manager submits SetProviderType for "Maria Brown" with ClinicalSpecialization "Hygienist"
+    Then no ProviderTypeSet event is recorded
+    And an error is shown: "Maria Brown does not hold the Provider role. Assign it before configuring clinical details."
+
+  Scenario: Setting ClinicalSpecialization succeeds when staff member holds Provider role
+    Given an active staff member "Dr. Brown" holds the "Provider" role
+    When the Practice Manager submits SetProviderType for "Dr. Brown" with ClinicalSpecialization "Dentist"
+    Then a ProviderTypeSet event is recorded with staff_member_id "Dr. Brown" and clinical_specialization "Dentist"
+
+  Scenario: Assigning provider to office succeeds when staff member holds Provider role
+    Given an active staff member "Dr. Brown" holds the "Provider" role
+    And an active office "Kingston" exists
+    When the Practice Manager submits AssignProviderToOffice for "Dr. Brown" at "Kingston"
+    Then a ProviderAssignedToOffice event is recorded with staff_member_id "Dr. Brown" and office "Kingston"
+
+  Scenario: A StaffMember can hold Provider role without a ClinicalSpecialization and is excluded from scheduling
+    Given an active staff member "Dr. Brown" holds the "Provider" role
+    And no ClinicalSpecialization has been set for "Dr. Brown"
+    When Scheduling queries available providers at any office
+    Then "Dr. Brown" is not returned
+
+  # Rule SM-C2: ClinicalSpecialization must be set before a provider appears in scheduling
+
+  Scenario: Provider without ClinicalSpecialization does not appear in scheduling queries
+    Given "Dr. Brown" holds the "Provider" role with no ClinicalSpecialization set
+    And "Dr. Brown" is assigned to office "Kingston" with Monday availability set
+    When Scheduling queries available providers at "Kingston"
+    Then "Dr. Brown" is not returned
+
+  Scenario: Provider with ClinicalSpecialization appears in scheduling after full configuration
+    Given "Dr. Brown" holds the "Provider" role with ClinicalSpecialization "Dentist"
+    And "Dr. Brown" is assigned to office "Kingston" with Monday 08:00-17:00 availability
+    When Scheduling queries available providers at "Kingston" for Monday
+    Then "Dr. Brown" is returned as a "Dentist"
+
+  Scenario: Booking rejected when provider specialization does not match procedure requirement
+    Given "Dr. Brown" holds the "Provider" role with ClinicalSpecialization "Hygienist"
+    When Patient Scheduling attempts to book a "Root Canal" (requires Dentist) with "Dr. Brown"
+    Then the booking is rejected: "Dr. Brown is a Hygienist; this procedure requires a Dentist."
+
+  # Rule SM-C3: Office assignment required before setting availability
+
+  Scenario: Setting availability at assigned office succeeds
+    Given "Dr. Brown" holds the "Provider" role and is assigned to office "Kingston"
+    When the Practice Manager sets Monday 08:00-17:00 availability for "Dr. Brown" at "Kingston"
+    Then a ProviderAvailabilitySet event is recorded with staff_member_id "Dr. Brown", office "Kingston", day Monday
+
+  Scenario: Setting availability at unassigned office is rejected
+    Given "Dr. Brown" holds the "Provider" role
+    And "Dr. Brown" is not assigned to office "Kingston"
+    When the Practice Manager sets Monday 08:00-17:00 availability for "Dr. Brown" at "Kingston"
+    Then no ProviderAvailabilitySet event is recorded
+    And an error is shown: "Dr. Brown is not assigned to Kingston. Assign them to this office first."
+
+  # Rule SM-C4: No cross-office availability overlap on the same day
+
+  Scenario: Non-overlapping cross-office availability on the same day is accepted
+    Given "Dr. Brown" is assigned to offices "Kingston" and "Montego Bay"
+    And "Dr. Brown" has Monday 08:00-12:00 availability at "Kingston"
+    When the Practice Manager sets Monday 13:00-17:00 availability for "Dr. Brown" at "Montego Bay"
+    Then a ProviderAvailabilitySet event is recorded for "Montego Bay" Monday 13:00-17:00
+
+  Scenario: Overlapping cross-office availability on the same day is rejected
+    Given "Dr. Brown" is assigned to offices "Kingston" and "Montego Bay"
+    And "Dr. Brown" has Monday 08:00-14:00 availability at "Kingston"
+    When the Practice Manager sets Monday 12:00-17:00 availability for "Dr. Brown" at "Montego Bay"
+    Then no ProviderAvailabilitySet event is recorded
+    And an error is shown: "Dr. Brown has overlapping availability at Kingston on Monday (08:00-14:00)."
+
+  Scenario: Adjacent availability windows at two offices on the same day are allowed
+    Given "Dr. Brown" is assigned to offices "Kingston" and "Montego Bay"
+    And "Dr. Brown" has Monday 08:00-12:00 availability at "Kingston"
+    When the Practice Manager sets Monday 12:00-17:00 availability for "Dr. Brown" at "Montego Bay"
+    Then a ProviderAvailabilitySet event is recorded for "Montego Bay" Monday 12:00-17:00
+
+  # Rule SM-C5: Exceptions are provider-wide and override all availability
+
+  Scenario: Setting an exception blocks provider at all offices for the date range
+    Given "Dr. Brown" is assigned to offices "Kingston" and "Montego Bay" with availability configured
+    When the Practice Manager sets an exception for "Dr. Brown" from 2026-12-20 to 2026-12-31 with reason "Holiday vacation"
+    Then a ProviderExceptionSet event is recorded with start_date 2026-12-20, end_date 2026-12-31, reason "Holiday vacation"
+    And "Dr. Brown" is unavailable at both "Kingston" and "Montego Bay" from 2026-12-20 to 2026-12-31
+
+  Scenario: Setting an exception with existing appointments in range warns but proceeds
+    Given "Dr. Brown" has 3 appointments booked between 2026-12-20 and 2026-12-31
+    When the Practice Manager sets an exception for "Dr. Brown" from 2026-12-20 to 2026-12-31
+    Then a ProviderExceptionSet event is recorded
+    And a warning is shown: "3 appointments exist in this date range — they will not be cancelled."
+
+  # Rule SM-C6: Archiving a StaffMember with Provider role removes them from scheduling
+
+  Scenario: Archiving a provider removes them from scheduling queries
+    Given "Dr. Brown" holds the "Provider" role with availability configured at "Kingston"
+    When the Practice Manager archives "Dr. Brown"
+    Then a StaffMemberArchived event is recorded for "Dr. Brown"
+    And Scheduling queries for providers at "Kingston" do not return "Dr. Brown"
+
+  Scenario: Booking an appointment with an archived StaffMember is rejected
+    Given "Dr. Brown" is archived
+    When Patient Scheduling attempts to book an appointment with "Dr. Brown"
+    Then the booking is rejected: "Dr. Brown is not available (archived)."
+
+  # Rule SM-C7: Provider role removal preserves clinical config but hides provider from scheduling
+
+  Scenario: Removing Provider role hides provider from scheduling without clearing clinical config
+    Given "Dr. Brown" holds the "Provider" role with Monday availability at "Kingston"
+    When the Practice Manager removes the "Provider" role from "Dr. Brown"
+    Then a RoleRemoved event is recorded for "Dr. Brown" with role "Provider"
+    And Scheduling queries for providers at "Kingston" do not return "Dr. Brown"
+    And "Dr. Brown"'s clinical configuration (office assignments and availability) is preserved
+
+  Scenario: Re-adding Provider role restores provider to scheduling with prior config intact
+    Given the "Provider" role was previously removed from "Dr. Brown"
+    And "Dr. Brown"'s clinical configuration (Monday availability at "Kingston") was preserved
+    When the Practice Manager assigns the "Provider" role to "Dr. Brown"
+    Then a RoleAssigned event is recorded for "Dr. Brown" with role "Provider"
+    And Scheduling queries for providers at "Kingston" for Monday return "Dr. Brown"
+
+  Scenario: Clinical configuration commands are rejected after Provider role removal
+    Given the "Provider" role was previously removed from "Dr. Brown"
+    When the Practice Manager submits SetProviderType for "Dr. Brown" with ClinicalSpecialization "Specialist"
+    Then no ProviderTypeSet event is recorded
+    And an error is shown: "Dr. Brown does not hold the Provider role. Assign it before configuring clinical details."
+
+  # Rule SM-C8: Setup checklist provider step reads from Staff Management
+
+  Scenario: Provider step is incomplete when StaffMember holds Provider role but has no ClinicalSpecialization
+    Given "Dr. Brown" holds the "Provider" role
+    And "Dr. Brown" has no ClinicalSpecialization set
+    When the setup checklist is evaluated
+    Then the provider setup step is "incomplete"
+
+  Scenario: Provider step is incomplete when ClinicalSpecialization is set but no office is assigned
+    Given "Dr. Brown" holds the "Provider" role with ClinicalSpecialization "Dentist"
+    And "Dr. Brown" is not assigned to any office
+    When the setup checklist is evaluated
+    Then the provider setup step is "incomplete"
+
+  Scenario: Provider step is incomplete when assigned to office but no availability set
+    Given "Dr. Brown" holds the "Provider" role with ClinicalSpecialization "Dentist"
+    And "Dr. Brown" is assigned to office "Kingston" with no availability set
+    When the setup checklist is evaluated
+    Then the provider setup step is "incomplete"
+
+  Scenario: Provider step is complete when all criteria are satisfied
+    Given "Dr. Brown" holds the "Provider" role with ClinicalSpecialization "Dentist"
+    And "Dr. Brown" is assigned to office "Kingston" with Monday 08:00-17:00 availability
+    When the setup checklist is evaluated
+    Then the provider setup step is "complete"
+
+  Scenario: Provider step reverts to incomplete when qualifying StaffMember is archived
+    Given the provider setup step is "complete" because "Dr. Brown" satisfies all criteria
+    When the Practice Manager archives "Dr. Brown"
+    Then the provider setup step is "incomplete"
+
+  Scenario: Provider step reverts to incomplete when Provider role is removed from only qualifying StaffMember
+    Given the provider setup step is "complete" because "Dr. Brown" satisfies all criteria
+    When the Practice Manager removes the "Provider" role from "Dr. Brown"
+    Then the provider setup step is "incomplete"
 
   # ─────────────────────────────────────────────────────────────
   # STAFF SHIFT ROSTER (SCH-5)
