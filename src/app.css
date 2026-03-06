@@ -58,6 +58,11 @@
   --color-cat-diagnostic:     #95a5a6;
   --color-cat-diagnostic-lt:  #f0f1f2;
 
+  /* ── Warning / duplicate alert state ─────────────────────────── */
+  --color-warning:      #7A5A00;  /* text on warning bg */
+  --color-warning-lt:   #FFF8E7;  /* warning bg */
+  --color-warning-border: #F0C040; /* warning border */
+
   /* ── Archived / inactive state ────────────────────────────────── */
   --color-archived:    #a06030;
   --color-archived-lt: #f0e6d3;

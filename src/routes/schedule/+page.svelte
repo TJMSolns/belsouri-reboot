@@ -1060,7 +1060,7 @@
           aria-selected={scheduleView === "grid"}
           onclick={() => (scheduleView = "grid")}
         >
-          <svg viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" stroke="currentColor" fill="none" aria-hidden="true" class="icon-sm"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+          <svg viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" stroke="currentColor" fill="none" aria-hidden="true" width="16" height="16" class="icon-sm"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
           Schedule
         </button>
         <button
@@ -1070,7 +1070,7 @@
           aria-selected={scheduleView === "roster"}
           onclick={() => (scheduleView = "roster")}
         >
-          <svg viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" stroke="currentColor" fill="none" aria-hidden="true" class="icon-sm"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+          <svg viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" stroke="currentColor" fill="none" aria-hidden="true" width="16" height="16" class="icon-sm"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
           Roster
         </button>
       </div>
@@ -1123,7 +1123,7 @@
         <div class="drawer-header">
           <h2 class="drawer-title" id="plan-shift-title">Plan shift</h2>
           <button class="btn btn-ghost btn-icon btn-sm" onclick={() => (showPlanShift = false)} aria-label="Close plan shift form">
-            <svg viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" stroke="currentColor" fill="none" aria-hidden="true" class="icon-sm"><path d="M18 6 6 18M6 6l12 12"/></svg>
+            <svg viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" stroke="currentColor" fill="none" aria-hidden="true" width="16" height="16" class="icon-sm"><path d="M18 6 6 18M6 6l12 12"/></svg>
           </button>
         </div>
         <div class="drawer-body">
@@ -1179,7 +1179,7 @@
           </div>
           {#if planShiftError}
             <div class="field-error" role="alert">
-              <svg viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" stroke="currentColor" fill="none" aria-hidden="true" class="icon-sm"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+              <svg viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" stroke="currentColor" fill="none" aria-hidden="true" width="16" height="16" class="icon-sm"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
               {planShiftError}
             </div>
           {/if}
@@ -1195,7 +1195,7 @@
               <span class="spinner-btn" aria-hidden="true"></span>
               Saving…
             {:else}
-              <svg viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" stroke="currentColor" fill="none" aria-hidden="true" class="icon-sm"><path d="M12 5v14M5 12h14"/></svg>
+              <svg viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" stroke="currentColor" fill="none" aria-hidden="true" width="16" height="16" class="icon-sm"><path d="M12 5v14M5 12h14"/></svg>
               Plan shift
             {/if}
           </button>
@@ -1248,9 +1248,9 @@
                         <div class="shift-cell" class:shift-cancelled={shift.cancelled}>
                           <span class="shift-times">
                             {#if shift.cancelled}
-                              <svg viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" stroke="currentColor" fill="none" aria-hidden="true" class="icon-xs shift-cancelled-icon"><path d="M18 6 6 18M6 6l12 12"/></svg>
+                              <svg viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" stroke="currentColor" fill="none" aria-hidden="true" width="16" height="16" class="icon-xsshift-cancelled-icon"><path d="M18 6 6 18M6 6l12 12"/></svg>
                             {:else}
-                              <svg viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" stroke="currentColor" fill="none" aria-hidden="true" class="icon-xs shift-active-icon"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                              <svg viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" stroke="currentColor" fill="none" aria-hidden="true" width="16" height="16" class="icon-xsshift-active-icon"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
                             {/if}
                             {minsTo12h(parseHHMM(shift.start_time))}–{minsTo12h(parseHHMM(shift.end_time))}
                           </span>
@@ -1266,7 +1266,7 @@
                               {#if cancellingShiftId === shift.shift_id}
                                 <span class="spinner spinner-xs" aria-hidden="true"></span>
                               {:else}
-                                <svg viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" stroke="currentColor" fill="none" aria-hidden="true" class="icon-md"><path d="M18 6 6 18M6 6l12 12"/></svg>
+                                <svg viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" stroke="currentColor" fill="none" aria-hidden="true" width="20" height="20" class="icon-md"><path d="M18 6 6 18M6 6l12 12"/></svg>
                               {/if}
                             </button>
                           {/if}

@@ -57,7 +57,7 @@
   let noteError = $state<string | null>(null);
 
   const STAFF_ID = "staff-system"; // placeholder until auth exists
-  const CHANNELS = ["", "Phone", "Email", "WhatsApp"];
+  const CHANNELS = ["", "WhatsApp", "Phone", "Email"];
 
   onMount(() => runSearch());
 
@@ -128,9 +128,15 @@
       regWarning = duplicate_warning ?? null;
       // Add to list or refresh
       patients = [patient, ...patients];
-      regFirstName = ""; regLastName = ""; regPhone = ""; regEmail = "";
-      regChannel = ""; regDob = "";
-      if (!duplicate_warning) showRegister = false;
+      if (!duplicate_warning) {
+        toast.success(`${patient.full_name_display} registered.`);
+        regFirstName = ""; regLastName = ""; regPhone = ""; regEmail = "";
+        regChannel = ""; regDob = "";
+        showRegister = false;
+      } else {
+        regFirstName = ""; regLastName = ""; regPhone = ""; regEmail = "";
+        regChannel = ""; regDob = "";
+      }
     } else {
       regError = r.error;
     }
@@ -187,6 +193,7 @@
     );
     demoSaving = false;
     if (r.status === "ok") {
+      toast.success(`Demographics updated for ${r.data.full_name_display}.`);
       detailData = { ...detailData, patient: r.data };
       patients = patients.map((p) => p.patient_id === r.data.patient_id ? r.data : p);
       editingSection = null;
@@ -217,6 +224,7 @@
     );
     contSaving = false;
     if (r.status === "ok") {
+      toast.success(`Contact info updated for ${r.data.full_name_display}.`);
       detailData = { ...detailData, patient: r.data };
       patients = patients.map((p) => p.patient_id === r.data.patient_id ? r.data : p);
       editingSection = null;
@@ -243,16 +251,17 @@
   }
 
   async function archivePatient(id: string) {
+    const name = patients.find((p) => p.patient_id === id)?.full_name_display ?? detailData?.patient.full_name_display ?? "this patient";
     const ok = await confirm({
-      title: "Archive patient",
-      message: "Archiving hides this patient from active searches. You can restore them later.",
+      title: `Archive ${name}?`,
+      message: `Archiving hides ${name} from active searches. You can restore them later.`,
       confirmLabel: "Archive",
       destructive: true,
     });
     if (!ok) return;
     const r = await commands.archivePatient(id, STAFF_ID);
     if (r.status === "ok") {
-      toast.success("Patient archived.");
+      toast.success(`${r.data.full_name_display} archived.`);
       patients = patients.map((p) => p.patient_id === id ? r.data : p);
       if (detailData?.patient.patient_id === id) {
         detailData = { ...detailData, patient: r.data };
@@ -263,15 +272,16 @@
   }
 
   async function unarchivePatient(id: string) {
+    const name = patients.find((p) => p.patient_id === id)?.full_name_display ?? detailData?.patient.full_name_display ?? "this patient";
     const ok = await confirm({
-      title: "Restore patient",
-      message: "Restore this patient to the active list?",
+      title: `Restore ${name}?`,
+      message: `Restore ${name} to the active patient list?`,
       confirmLabel: "Restore",
     });
     if (!ok) return;
     const r = await commands.unarchivePatient(id, STAFF_ID);
     if (r.status === "ok") {
-      toast.success("Patient restored.");
+      toast.success(`${r.data.full_name_display} restored to active patients.`);
       patients = patients.map((p) => p.patient_id === id ? r.data : p);
       if (detailData?.patient.patient_id === id) {
         detailData = { ...detailData, patient: r.data };
@@ -579,7 +589,7 @@
   h3 { margin: 0 0 var(--space-4); font-size: var(--text-base); font-family: var(--font-heading); font-weight: 600; color: var(--abyss-navy); }
   h4 { margin: 0; font-size: var(--text-xs); font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--slate-fog); font-family: var(--font-heading); }
   .error { color: var(--healthy-coral-dk); font-size: var(--text-sm); margin-bottom: var(--space-3); }
-  .warning { color: #7A5A00; background: #FFF8E7; border: 1px solid #F0C040; border-radius: var(--radius-md); padding: var(--space-2) var(--space-3); font-size: var(--text-sm); margin-bottom: var(--space-3); }
+  .warning { color: var(--color-warning); background: var(--color-warning-lt); border: 1px solid var(--color-warning-border); border-radius: var(--radius-md); padding: var(--space-2) var(--space-3); font-size: var(--text-sm); margin-bottom: var(--space-3); }
   .empty { color: var(--slate-fog); font-style: italic; font-size: var(--text-sm); }
   .loading { color: var(--slate-fog); font-size: var(--text-sm); }
 
@@ -668,7 +678,7 @@
   .btn-secondary:hover { background: var(--caribbean-teal-lt); }
 
   .btn-sm {
-    display: inline-flex; align-items: center; min-height: 36px; padding: 0 var(--space-4);
+    display: inline-flex; align-items: center; min-height: 44px; padding: 0 var(--space-4);
     background: var(--caribbean-teal); color: #fff; border: none;
     border-radius: var(--radius-md); font-family: var(--font-heading); font-size: var(--text-xs);
     font-weight: 600; cursor: pointer; white-space: nowrap;
@@ -679,7 +689,7 @@
   .btn-sm.btn-ghost:hover { background: var(--pearl-mist); color: var(--abyss-navy); border-color: var(--abyss-navy); }
 
   .btn-danger-sm {
-    display: inline-flex; align-items: center; min-height: 36px; padding: 0 var(--space-4);
+    display: inline-flex; align-items: center; min-height: 44px; padding: 0 var(--space-4);
     background: transparent; color: var(--healthy-coral-dk); border: 1.5px solid var(--healthy-coral);
     border-radius: var(--radius-md); font-family: var(--font-heading); font-size: var(--text-xs);
     font-weight: 600; cursor: pointer;
